@@ -1,0 +1,26 @@
+version: '3.1'
+
+services:
+  pg:
+    image: "postgres:12-alpine"
+    restart: always
+    ports: 
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: pgadmin
+      POSTGRES_DB: schocken
+  schocken-auth-server:
+    image: "schocken-auth-server:0.1.0-alpha1"
+    restart: always
+    ports: 
+      - "${PORT}:8080"
+    environment:
+      DB_PWD: secret
+      DB_USER: pgadmin
+      DB_NAME: schocken
+      DB_HOST: pg
+      DB_PORT: 5432
+      HOST: 0.0.0.0
+      PORT: 8080
+      DAY0_TOKEN: ${DAY0_TOKEN}

@@ -1,4 +1,5 @@
 use auth_hexagon::{auth_config_port::AuthConfigPort, auth_service_port::AuthServicePort};
+use log::info;
 
 mod auth_hexagon;
 
@@ -37,6 +38,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = AuthServiceRestAdapter::new(&host, &port.to_string(), auth_service)
         .run()
         .await;
+    info!("http server has started");
 
     server.await?;
 

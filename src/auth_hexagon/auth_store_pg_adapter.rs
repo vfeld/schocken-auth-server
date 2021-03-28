@@ -206,7 +206,7 @@ mod tests {
         };
         let roles = vec![Roles::Admin, Roles::Default];
         let token: Token = "1234567890".into();
-        let lifetime = time::Duration::second();
+        let lifetime = time::Duration::second()*60;
 
         let result = store.set_day0_token(&token).await;
         match result {
