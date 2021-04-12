@@ -32,7 +32,7 @@ HOST=127.0.0.1
 PORT=8080
 RUST_LOG=info
 ```
-Now you are ready to execute the tests
+Now you are ready to execute the tests 
 ```
 $ docker-compose -f integrations/docker-compose-unittest/docker-compose.yml up -d
 $ cargo test
