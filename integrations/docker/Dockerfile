@@ -1,32 +1,52 @@
-# Build dependencies
-FROM rust:1.50.0-alpine3.13 as depbuilder
-ARG APP=schocken-auth-server
+ARG ALPINEVERSION=3.13
+ARG RUSTVERSION=1.50.0
 
+# Dependency Builder for seldom changing objects to utilize docker caching
+FROM rust:${RUSTVERSION}-alpine${ALPINEVERSION} as depbuilder
+# copy Cargo.lock first to steer docker cache selection
+COPY Cargo.lock /usr/src/app/
+COPY Cargo.toml /usr/src/app/
+COPY build_deps.rs /usr/src/app/
 WORKDIR /usr/src/app
 RUN apk update \
-    && apk add --no-cache build-base
-COPY build_deps.rs .
-COPY Cargo.toml .
-COPY Cargo.lock .
-RUN cargo build --release --bin build_deps
+    && apk add --no-cache build-base jq
+RUN cargo build --bin build_deps
+RUN cargo test --no-run --bin build_deps
 
-# Build app
-FROM depbuilder as appbuilder
-ARG APP=schocken-auth-server
-COPY src src
-COPY migrations migrations
-RUN cargo build --release --bin ${APP}  
+# The application sources
+FROM depbuilder as appcommon
+COPY src /usr/src/app/src
+COPY migrations /usr/src/app/migrations
 
-# Runtime image
-FROM alpine:3.13
+# App Builder
+FROM appcommon as appbuilder
 ARG APP=schocken-auth-server
 WORKDIR /usr/src/app
+RUN cargo build --bin ${APP} && cp /usr/src/app/target/debug/${APP} /tmp/${APP}
 
-RUN apk update \
-    && apk add --no-cache ca-certificates tzdata \
-    && rm -rf /var/cache/apk/*
-COPY --from=appbuilder /usr/src/app/target/release/${APP} /usr/local/bin/${APP}
+# Test Builder
+FROM appcommon as testbuilder
+ARG APP=schocken-auth-server
+ARG APPOBJ=schocken_auth_server
+WORKDIR /usr/src/app
 
+RUN TEST_EXE=$(cargo test --no-run --message-format json | jq .executable | grep ${APPOBJ} | sed 's/"//g') && cp $TEST_EXE /tmp/${APP}
+
+# TARGET: Test image
+FROM alpine:${ALPINEVERSION} as test
+ARG APP=schocken-auth-server
+WORKDIR /usr/src/app
+COPY --from=testbuilder /tmp/${APP} /usr/local/bin/${APP}
 USER 1000
-
 CMD ["${APP}"]
+
+# TARGET: App image (with debug options)
+FROM alpine:${ALPINEVERSION} as app
+ARG APP=schocken-auth-server
+WORKDIR /usr/src/app
+COPY --from=appbuilder /tmp/${APP} /usr/local/bin/${APP}
+USER 1000
+CMD ["${APP}"]
+
+# DEFAULT TARGET
+FROM app
