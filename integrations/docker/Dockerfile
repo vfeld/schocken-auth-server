@@ -27,10 +27,9 @@ RUN cargo build --bin ${APP} && cp /usr/src/app/target/debug/${APP} /tmp/${APP}
 # Test Builder
 FROM appcommon as testbuilder
 ARG APP=schocken-auth-server
-ARG APPOBJ=schocken_auth_server
 WORKDIR /usr/src/app
 
-RUN TEST_EXE=$(cargo test --no-run --message-format json | jq .executable | grep ${APPOBJ} | sed 's/"//g') && cp $TEST_EXE /tmp/${APP}
+RUN TEST_EXE=$(cargo test --no-run --bin schocken-auth-server --message-format json | jq .executable | grep target | sed 's/"//g') && cp $TEST_EXE /tmp/${APP}
 
 # TARGET: Test image
 FROM alpine:${ALPINEVERSION} as test
