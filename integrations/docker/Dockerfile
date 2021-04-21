@@ -37,7 +37,7 @@ ARG APP=schocken-auth-server
 WORKDIR /usr/src/app
 COPY --from=testbuilder /tmp/${APP} /usr/local/bin/${APP}
 USER 1000
-CMD ["${APP}"]
+CMD [ ${APP} ]
 
 # TARGET: App image (with debug options)
 FROM alpine:${ALPINEVERSION} as app
@@ -45,7 +45,7 @@ ARG APP=schocken-auth-server
 WORKDIR /usr/src/app
 COPY --from=appbuilder /tmp/${APP} /usr/local/bin/${APP}
 USER 1000
-CMD ["${APP}"]
+CMD [ ${APP} ]
 
 # DEFAULT TARGET
 FROM app
