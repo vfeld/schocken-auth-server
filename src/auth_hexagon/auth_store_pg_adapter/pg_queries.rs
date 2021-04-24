@@ -174,17 +174,18 @@ INSERT INTO user_id (user_id) VALUES (DEFAULT) RETURNING user_id;
 pub async fn insert_credential(
     pool: Arc<Pool<Postgres>>,
     user_id: UserId,
-    credential: &Credential,
+    login_name: &str,
+    password_hash: &[u8]
 ) -> Result<(), AuthStoreError> {
     let rec = sqlx::query(
         r#"
-INSERT INTO credentials ( user_id, login_name, pwd)
+INSERT INTO credentials ( user_id, login_name, pwd_hash)
 VALUES ( $1 , $2, $3);
         "#,
     )
     .bind(&user_id)
-    .bind(&credential.login_name)
-    .bind(&credential.password)
+    .bind(login_name)
+    .bind(password_hash)
     .execute(&*pool)
     .await;
     match rec {
@@ -284,4 +285,44 @@ VALUES ( DEFAULT , $1, $2);
         }
     }
     Ok(())
+}
+
+/// Return the validation time of the day0 token or an error in case it was not valid or not found
+pub async fn get_pwd_hash(
+    pool: Arc<Pool<Postgres>>,
+    login_name: &str,
+) -> Result<(UserId,Vec<u8>), AuthStoreError> {
+    let res = sqlx::query(
+        r#"
+SELECT user_id, pwd_hash FROM credentials WHERE login_name = $1;
+        "#,
+    )
+    .bind(&login_name)
+    .fetch_one(&*pool)
+    .await;
+    match res {
+        Ok(row) => {
+            let user_id: UserId = row.try_get("user_id")?;
+            let pwd_hash: Vec<u8> = row.try_get("pwd_hash")?;
+            Ok((user_id,pwd_hash))
+        }
+        Err(err) => {
+            match filter_user_error(&err) {
+                Some(PgUserError::DataNotFound) => {
+                    let eid = uuid::Uuid::new_v4();
+                    let details = "credential not found";
+                    error!("eid: {}, details: {}", eid, details);
+                    return Err(AuthStoreError::DataNotFound(
+                        eid.to_string(),
+                        details.into(),
+                    ));
+                }
+                _ => {}
+            }
+            let e: AuthStoreError = err.into();
+            let eid = e.eid();
+            error!("eid: {}, error when fetching credentials", eid);
+            return Err(e);
+        }
+    }
 }

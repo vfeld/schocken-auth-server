@@ -34,9 +34,9 @@ RUST_LOG=info
 ```
 Now you are ready to execute the tests 
 ```
-$ docker-compose -f integrations/docker-compose-unittest/docker-compose.yml up -d
+$ docker compose -f integrations/docker-compose-unittest/docker-compose.yml up -d
 $ cargo test
-$ docker-compose -f integrations/docker-compose-unittest/docker-compose.yml down
+$ docker compose -f integrations/docker-compose-unittest/docker-compose.yml down
 ```
 
 # Further Reading

@@ -7,11 +7,16 @@ pub trait AuthStorePort {
     async fn day0_registration(
         &self,
         user: &UserProfile,
-        credential: &Credential,
+        login_name: &str,
+        password_hash: &[u8],
         roles: Vec<Roles>,
         token: &Token,
         lifetime: time::Duration,
     ) -> Result<UserId, AuthStoreError>;
+    async fn get_pwd_hash(
+        &self,
+        login_name: &str,
+    ) -> Result<(UserId, Vec<u8>), AuthStoreError>;
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +25,7 @@ pub enum AuthStoreError {
     ConnectivityProblem(String, String),
     InternalProblem(String, String),
     InvalidOneTimeToken(String, String),
+    DataNotFound(String, String),
 }
 
 impl std::fmt::Display for AuthStoreError {
@@ -37,6 +43,9 @@ impl std::fmt::Display for AuthStoreError {
             AuthStoreError::InvalidOneTimeToken(eid, details) => {
                 format!("Internal Problem, eid: {}, details: {}", eid, details)
             }
+            AuthStoreError::DataNotFound(eid, details) => {
+                format!("Data not found, eid: {}, details: {}", eid, details)
+            }
         };
         f.write_str(&error)
     }
@@ -49,6 +58,7 @@ impl AuthStoreError {
             AuthStoreError::ConnectivityProblem(eid, _) => eid,
             AuthStoreError::InternalProblem(eid, _) => eid,
             AuthStoreError::InvalidOneTimeToken(eid, _) => eid,
+            AuthStoreError::DataNotFound(eid, _) => eid,
         }
     }
 }

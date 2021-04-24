@@ -126,7 +126,13 @@ impl ResponseError for AuthServiceError {
                 (StatusCode::CONFLICT, "UserAlreadyExists")
             }
             AuthServiceError::InvalidOneTimeToken(_, _) => {
-                (StatusCode::CONFLICT, "InvalidOneTimeToken")
+                (StatusCode::UNAUTHORIZED, "InvalidOneTimeToken")
+            }
+            AuthServiceError::Unauthorized(_, _) => {
+                (StatusCode::UNAUTHORIZED, "Unauthorized")
+            }
+            AuthServiceError::InternalError(_, _) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "InternalError")
             }
         };
         HttpResponse::build(status_code).json(json!({ "reason": reason, "eid": eid}))

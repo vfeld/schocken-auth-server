@@ -13,6 +13,10 @@ pub struct AuthServiceMock {
         Matcher<(UserProfile, Credential, Token)>,
         Result<UserId, super::auth_service_port::AuthServiceError>,
     >,
+    pub auth_credential: Mock<
+        Matcher<Credential>,
+        Result<UserId, super::auth_service_port::AuthServiceError>,
+    >,
 }
 
 #[async_trait]
@@ -36,6 +40,13 @@ impl AuthServicePort for AuthServiceMock {
             token.clone(),
         )))
     }
+
+    async fn auth_credential(
+        &self,
+        credential: &Credential,
+    ) -> Result<UserId, super::auth_service_port::AuthServiceError> {
+        self.auth_credential.called(Matcher::Val(credential.clone())) 
+    }
 }
 
 impl AuthServiceMock {
@@ -43,6 +54,8 @@ impl AuthServiceMock {
         AuthServiceMock {
             set_day0_token: Mock::new(Ok(())),
             day0_registration: Mock::new(Ok(0)),
+            auth_credential: Mock::new(Ok(0)),
+
         }
     }
 }

@@ -85,7 +85,8 @@ impl AuthStorePort for AuthStorePgAdapter {
     async fn day0_registration(
         &self,
         user: &UserProfile,
-        credential: &Credential,
+        login_name: &str,
+        password_hash: &[u8],
         roles: Vec<Roles>,
         token: &super::auth_types::Token,
         lifetime: time::Duration,
@@ -108,13 +109,21 @@ impl AuthStorePort for AuthStorePgAdapter {
         }
 
         let user_id = pg_queries::create_user_id(pool.clone()).await?;
-        pg_queries::insert_credential(pool.clone(), user_id, credential).await?;
+        pg_queries::insert_credential(pool.clone(), user_id, login_name, password_hash).await?;
         pg_queries::insert_user_profile(pool.clone(), user_id, user).await?;
         pg_queries::insert_roles(pool.clone(), user_id, &roles).await?;
         pg_queries::invalidate_day0_token(pool.clone(), token).await?;
 
         tx.commit().await?;
         Ok(user_id)
+    }
+
+    async fn get_pwd_hash(
+        &self,
+        login_name: &str,
+    ) -> Result<(UserId,Vec<u8>), AuthStoreError> {
+        let pool = self.pool.clone();
+        pg_queries::get_pwd_hash(pool.clone(),login_name).await    
     }
 }
 
@@ -162,6 +171,7 @@ impl core::convert::From<sqlx::Error> for AuthStoreError {
 #[cfg(test)]
 mod tests {
 
+    use sodiumoxide::crypto::pwhash;
     use uuid::Uuid;
 
     use super::*;
@@ -204,9 +214,15 @@ mod tests {
             login_name: "john.doe@example.local".into(),
             password: "12345678".into(),
         };
+        let pwh = pwhash::pwhash(
+            &cred.password.clone().into_bytes(),
+            pwhash::OPSLIMIT_INTERACTIVE,
+            pwhash::MEMLIMIT_INTERACTIVE,
+        )
+        .unwrap();
         let roles = vec![Roles::Admin, Roles::Default];
         let token: Token = "1234567890".into();
-        let lifetime = time::Duration::second()*60;
+        let lifetime = time::Duration::second() * 60;
 
         let result = store.set_day0_token(&token).await;
         match result {
@@ -215,7 +231,7 @@ mod tests {
         }
 
         let result = store
-            .day0_registration(&user, &cred, roles, &token, lifetime)
+            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token, lifetime)
             .await;
         match result {
             Ok(_id) => assert!(true),
@@ -256,6 +272,13 @@ mod tests {
             login_name: "john.doe@example.local".into(),
             password: "12345678".into(),
         };
+        let pwh = pwhash::pwhash(
+            &cred.password.clone().into_bytes(),
+            pwhash::OPSLIMIT_INTERACTIVE,
+            pwhash::MEMLIMIT_INTERACTIVE,
+        )
+        .unwrap();
+
         let roles = vec![Roles::Admin, Roles::Default];
         let token: Token = "1234567890".into();
         let token_invalid: Token = "1234567891".into();
@@ -269,7 +292,7 @@ mod tests {
         }
 
         let result = store
-            .day0_registration(&user, &cred, roles, &token_invalid, lifetime)
+            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token_invalid, lifetime)
             .await;
         match result {
             Ok(_id) => assert!(false),
@@ -278,5 +301,70 @@ mod tests {
                 _ => assert!(false),
             },
         }
+    }
+    #[actix_web::main]
+    #[test]
+    async fn test_admin_auth() {
+        let store = init("test_admin_authentication").await;
+
+        let user = UserProfile {
+            first_name: "John".into(),
+            last_name: "Doe".into(),
+            email: "john.doe@example.local".into(),
+        };
+        let cred = Credential {
+            login_name: "john.doe@example.local".into(),
+            password: "12345678".into(),
+        };
+        let pwh = pwhash::pwhash(
+            &cred.password.clone().into_bytes(),
+            pwhash::OPSLIMIT_INTERACTIVE,
+            pwhash::MEMLIMIT_INTERACTIVE,
+        )
+        .unwrap();
+        let roles = vec![Roles::Admin, Roles::Default];
+        let token: Token = "1234567890".into();
+        let lifetime = time::Duration::second() * 60;
+
+        let result = store.set_day0_token(&token).await;
+        match result {
+            Ok(_id) => assert!(true),
+            Err(_e) => assert!(false),
+        }
+
+        let result = store
+            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token, lifetime)
+            .await;
+        match result {
+            Ok(_id) => assert!(true),
+            Err(_e) => assert!(false),
+        }
+
+        let result = store
+        .get_pwd_hash(&cred.login_name)
+        .await;
+        let pwd_hash = match result {
+            Ok((uid,pwd_hash)) => pwd_hash,
+            Err(_e) => {
+                assert!(false);
+                return
+            },
+        };
+        let result = pwhash::pwhash_verify(&pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(), cred.password.clone().as_bytes());
+        assert!(result);
+
+        let result = pwhash::pwhash_verify(&pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(), "wrong password".as_bytes());
+        assert!(!result);
+
+        let result = store
+        .get_pwd_hash(&"unknown user")
+        .await;
+        match result {
+            Ok((_,_)) => assert!(false),
+            Err(AuthStoreError::DataNotFound(_,_)) => {
+                assert!(true);
+            },
+            _ => assert!(false)
+        };
     }
 }

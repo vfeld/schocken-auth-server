@@ -8,13 +8,16 @@ impl core::convert::From<AuthStoreError> for AuthServiceError {
                 AuthServiceError::ConnectivityProblem(eid, details)
             }
             AuthStoreError::InternalProblem(eid, details) => {
-                AuthServiceError::RegistrationNotAllowed(eid, details)
+                AuthServiceError::InternalError(eid, details)
             }
             AuthStoreError::MisConfiguration(eid, details) => {
-                AuthServiceError::RegistrationNotAllowed(eid, details)
+                AuthServiceError::InternalError(eid, details)
             }
             AuthStoreError::InvalidOneTimeToken(eid, details) => {
                 AuthServiceError::InvalidOneTimeToken(eid, details)
+            }
+            AuthStoreError::DataNotFound(eid, details) => {
+                AuthServiceError::InternalError(eid, details)
             }
         }
     }

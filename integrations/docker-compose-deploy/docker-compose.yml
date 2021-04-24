@@ -1,4 +1,4 @@
-version: '3.1'
+version: '3.9'
 
 services:
   pg:
@@ -11,7 +11,9 @@ services:
       POSTGRES_USER: pgadmin
       POSTGRES_DB: schocken
   schocken-auth-server:
-    image: "schocken-auth-server:0.1.0-alpha1"
+    build: 
+      context: ../..
+      dockerfile: ./integrations/docker/Dockerfile
     restart: always
     ports: 
       - "${PORT}:8080"
