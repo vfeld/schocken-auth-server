@@ -19,6 +19,12 @@ impl core::convert::From<AuthStoreError> for AuthServiceError {
             AuthStoreError::DataNotFound(eid, details) => {
                 AuthServiceError::InternalError(eid, details)
             }
+            AuthStoreError::DataNotUnique(eid, details) => {
+                AuthServiceError::InternalError(eid, details)
+            }
+            AuthStoreError::InvalidSessionId(eid, details) => {
+                AuthServiceError::Unauthorized(eid, details)
+            }
         }
     }
 }

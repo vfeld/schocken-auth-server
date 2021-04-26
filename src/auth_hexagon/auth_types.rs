@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 pub type Token = String;
 pub type UserId = i64;
+pub type SessionToken = String;
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct UserProfile {
@@ -20,6 +22,15 @@ pub struct Credential {
 pub enum Roles {
     Default,
     Admin,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionTokenClaims {
+    pub sub: String,
+    pub iss: String,
+    pub exp: usize,
+    pub iat: usize,
+    pub aud: String,
 }
 
 impl Display for Roles {

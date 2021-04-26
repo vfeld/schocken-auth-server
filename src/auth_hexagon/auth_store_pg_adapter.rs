@@ -9,6 +9,8 @@ use log::error;
 
 pub mod pg_error_mapping;
 pub mod pg_queries;
+pub mod pg_queries_credential;
+pub mod pg_queries_session;
 
 #[derive(Clone, Debug)]
 pub struct AuthStorePgAdapter {
@@ -118,12 +120,49 @@ impl AuthStorePort for AuthStorePgAdapter {
         Ok(user_id)
     }
 
-    async fn get_pwd_hash(
-        &self,
-        login_name: &str,
-    ) -> Result<(UserId,Vec<u8>), AuthStoreError> {
+    async fn get_pwd_hash(&self, login_name: &str) -> Result<(UserId, Vec<u8>), AuthStoreError> {
         let pool = self.pool.clone();
-        pg_queries::get_pwd_hash(pool.clone(),login_name).await    
+        pg_queries_credential::get_pwd_hash(pool.clone(), login_name).await
+    }
+
+    async fn set_session_id(
+        &self,
+        user_id: &UserId,
+        session_id: &str,
+    ) -> Result<(), AuthStoreError> {
+        let pool = self.pool.clone();
+        let tx = pool.begin().await?;
+        match pg_queries_session::find_user_id_by_session_id(pool.clone(), session_id).await? {
+            Some(found_user_id) => {
+                if &found_user_id != user_id {
+                    let uuid = uuid::Uuid::new_v4();
+                    let details = "session id, user_id mismatch";
+                    error!("eid: {}, details: {}", uuid, details);
+                    return Err(AuthStoreError::InvalidSessionId(
+                        uuid.to_string(),
+                        details.into(),
+                    ));
+                }
+                pg_queries_session::delete_session(pool.clone(), user_id).await?;
+            }
+            None => {}
+        }
+        pg_queries_session::insert_session_id(pool.clone(), user_id, session_id).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn get_user_id_by_session_id(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<UserId>, AuthStoreError> {
+        let pool = self.pool.clone();
+        pg_queries_session::find_user_id_by_session_id(pool.clone(), session_id).await
+    }
+
+    async fn delete_session_id(&self, user_id: &UserId) -> Result<(), AuthStoreError> {
+        let pool = self.pool.clone();
+        pg_queries_session::delete_session(pool.clone(), user_id).await
     }
 }
 
@@ -231,7 +270,14 @@ mod tests {
         }
 
         let result = store
-            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token, lifetime)
+            .day0_registration(
+                &user,
+                &cred.login_name,
+                pwh.as_ref(),
+                roles,
+                &token,
+                lifetime,
+            )
             .await;
         match result {
             Ok(_id) => assert!(true),
@@ -292,7 +338,14 @@ mod tests {
         }
 
         let result = store
-            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token_invalid, lifetime)
+            .day0_registration(
+                &user,
+                &cred.login_name,
+                pwh.as_ref(),
+                roles,
+                &token_invalid,
+                lifetime,
+            )
             .await;
         match result {
             Ok(_id) => assert!(false),
@@ -304,8 +357,8 @@ mod tests {
     }
     #[actix_web::main]
     #[test]
-    async fn test_admin_auth() {
-        let store = init("test_admin_authentication").await;
+    async fn test_auth_password() {
+        let store = init("test_auth_password").await;
 
         let user = UserProfile {
             first_name: "John".into(),
@@ -333,38 +386,86 @@ mod tests {
         }
 
         let result = store
-            .day0_registration(&user, &cred.login_name,pwh.as_ref(), roles, &token, lifetime)
+            .day0_registration(
+                &user,
+                &cred.login_name,
+                pwh.as_ref(),
+                roles,
+                &token,
+                lifetime,
+            )
             .await;
         match result {
             Ok(_id) => assert!(true),
             Err(_e) => assert!(false),
         }
 
-        let result = store
-        .get_pwd_hash(&cred.login_name)
-        .await;
+        let result = store.get_pwd_hash(&cred.login_name).await;
         let pwd_hash = match result {
-            Ok((uid,pwd_hash)) => pwd_hash,
+            Ok((_uid, pwd_hash)) => pwd_hash,
             Err(_e) => {
                 assert!(false);
-                return
-            },
+                return;
+            }
         };
-        let result = pwhash::pwhash_verify(&pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(), cred.password.clone().as_bytes());
+        let result = pwhash::pwhash_verify(
+            &pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(),
+            cred.password.clone().as_bytes(),
+        );
         assert!(result);
 
-        let result = pwhash::pwhash_verify(&pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(), "wrong password".as_bytes());
+        let result = pwhash::pwhash_verify(
+            &pwhash::HashedPassword::from_slice(&pwd_hash[..]).unwrap(),
+            "wrong password".as_bytes(),
+        );
         assert!(!result);
 
-        let result = store
-        .get_pwd_hash(&"unknown user")
-        .await;
+        let result = store.get_pwd_hash(&"unknown user").await;
         match result {
-            Ok((_,_)) => assert!(false),
-            Err(AuthStoreError::DataNotFound(_,_)) => {
+            Ok((_, _)) => assert!(false),
+            Err(AuthStoreError::DataNotFound(_, _)) => {
                 assert!(true);
-            },
-            _ => assert!(false)
+            }
+            _ => assert!(false),
         };
+    }
+
+    #[actix_web::main]
+    #[test]
+    async fn test_session() {
+        let store = init("test_session").await;
+        match store.set_session_id(&5, "s1").await {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        }
+        match store.get_user_id_by_session_id("s0").await {
+            Ok(Some(_)) => assert!(false),
+            Ok(None) => assert!(true),
+            Err(_) => assert!(false),
+        }
+        match store.get_user_id_by_session_id("s1").await {
+            Ok(Some(u)) => {
+                if u == 5 {
+                    assert!(true)
+                } else {
+                    assert!(false)
+                }
+            }
+            Ok(None) => assert!(false),
+            Err(_) => assert!(false),
+        }
+        match store.delete_session_id(&1).await {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        }
+        match store.delete_session_id(&5).await {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        }
+        match store.get_user_id_by_session_id("s1").await {
+            Ok(Some(_)) => assert!(false),
+            Ok(None) => assert!(true),
+            Err(_) => assert!(false),
+        }
     }
 }

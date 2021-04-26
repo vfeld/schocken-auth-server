@@ -55,4 +55,16 @@ impl AuthConfigPort for AuthConfigEnvAdapter {
             .parse::<u16>()
             .expect("PORT must be a number")
     }
+
+    async fn session_lifetime(&self) -> time::Duration {
+        let lifetime_minutes = env::var("SESSION_LIFETIME_MINUTES")
+            .unwrap_or("60".into())
+            .parse::<u32>()
+            .expect("SESSION_LIFETIME_MINUTES needs to be a number");
+        time::Duration::minute() * lifetime_minutes
+    }
+
+    async fn jwt_signing_secret(&self) -> String {
+        env::var("JWT_SIGNING_SECRET").expect("A JWT signing secret must be set")
+    }
 }

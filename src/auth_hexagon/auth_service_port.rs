@@ -12,10 +12,17 @@ pub trait AuthServicePort {
         credential: &Credential,
         token: &Token,
     ) -> Result<UserId, AuthServiceError>;
-    async fn auth_credential(
+    /// Authenticate using user name and password
+    async fn auth_credential(&self, credential: &Credential) -> Result<UserId, AuthServiceError>;
+    async fn create_session_token(
         &self,
-        credential: &Credential,
+        user_id: &UserId,
+    ) -> Result<SessionToken, AuthServiceError>;
+    async fn auth_session_token(
+        &self,
+        session_token: &SessionToken,
     ) -> Result<UserId, AuthServiceError>;
+    async fn delete_session_token(&self, user_id: &UserId) -> Result<(), AuthServiceError>;
 }
 
 #[derive(Debug, Clone)]
@@ -25,16 +32,15 @@ pub enum AuthServiceError {
     ConnectivityProblem(String, String),
     UserAlreadyExists(String, String),
     InvalidOneTimeToken(String, String),
-    Unauthorized(String,String)
+    Unauthorized(String, String),
 }
 
 impl std::fmt::Display for AuthServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let error = match self {
-            AuthServiceError::InternalError(eid, details) => format!(
-                "eid: {}, slogan: Internal Error, details: {}",
-                eid, details
-            ),            
+            AuthServiceError::InternalError(eid, details) => {
+                format!("eid: {}, slogan: Internal Error, details: {}", eid, details)
+            }
             AuthServiceError::RegistrationNotAllowed(eid, details) => format!(
                 "eid: {}, slogan: Registration not allowed, details: {}",
                 eid, details
@@ -51,10 +57,9 @@ impl std::fmt::Display for AuthServiceError {
                 "eid: {}, slogan: Invalid one time token, details: {}",
                 eid, details
             ),
-            AuthServiceError::Unauthorized(eid, details) => format!(
-                "eid: {}, slogan: Unauthorized, details: {}",
-                eid, details
-            ),
+            AuthServiceError::Unauthorized(eid, details) => {
+                format!("eid: {}, slogan: Unauthorized, details: {}", eid, details)
+            }
         };
         f.write_str(&error)
     }

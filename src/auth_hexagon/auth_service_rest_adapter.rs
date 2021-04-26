@@ -128,9 +128,7 @@ impl ResponseError for AuthServiceError {
             AuthServiceError::InvalidOneTimeToken(_, _) => {
                 (StatusCode::UNAUTHORIZED, "InvalidOneTimeToken")
             }
-            AuthServiceError::Unauthorized(_, _) => {
-                (StatusCode::UNAUTHORIZED, "Unauthorized")
-            }
+            AuthServiceError::Unauthorized(_, _) => (StatusCode::UNAUTHORIZED, "Unauthorized"),
             AuthServiceError::InternalError(_, _) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "InternalError")
             }

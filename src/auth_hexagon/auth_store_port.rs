@@ -13,10 +13,17 @@ pub trait AuthStorePort {
         token: &Token,
         lifetime: time::Duration,
     ) -> Result<UserId, AuthStoreError>;
-    async fn get_pwd_hash(
+    async fn get_pwd_hash(&self, login_name: &str) -> Result<(UserId, Vec<u8>), AuthStoreError>;
+    async fn set_session_id(
         &self,
-        login_name: &str,
-    ) -> Result<(UserId, Vec<u8>), AuthStoreError>;
+        user_id: &UserId,
+        session_id: &str,
+    ) -> Result<(), AuthStoreError>;
+    async fn get_user_id_by_session_id(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<UserId>, AuthStoreError>;
+    async fn delete_session_id(&self, user_id: &UserId) -> Result<(), AuthStoreError>;
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +33,8 @@ pub enum AuthStoreError {
     InternalProblem(String, String),
     InvalidOneTimeToken(String, String),
     DataNotFound(String, String),
+    DataNotUnique(String, String),
+    InvalidSessionId(String, String),
 }
 
 impl std::fmt::Display for AuthStoreError {
@@ -46,6 +55,12 @@ impl std::fmt::Display for AuthStoreError {
             AuthStoreError::DataNotFound(eid, details) => {
                 format!("Data not found, eid: {}, details: {}", eid, details)
             }
+            AuthStoreError::DataNotUnique(eid, details) => {
+                format!("Data not unique, eid: {}, details: {}", eid, details)
+            }
+            AuthStoreError::InvalidSessionId(eid, details) => {
+                format!("Invalid session id, eid: {}, details: {}", eid, details)
+            }
         };
         f.write_str(&error)
     }
@@ -59,6 +74,8 @@ impl AuthStoreError {
             AuthStoreError::InternalProblem(eid, _) => eid,
             AuthStoreError::InvalidOneTimeToken(eid, _) => eid,
             AuthStoreError::DataNotFound(eid, _) => eid,
+            AuthStoreError::DataNotUnique(eid, _) => eid,
+            AuthStoreError::InvalidSessionId(eid, _) => eid,
         }
     }
 }
