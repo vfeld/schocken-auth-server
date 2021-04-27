@@ -2,7 +2,6 @@ use base64;
 use log::error;
 use std::convert::TryFrom;
 
-use super::auth_config_port::*;
 use super::auth_service_port::*;
 use super::auth_store_port::*;
 use super::auth_types::*;
@@ -10,31 +9,40 @@ use super::auth_types::*;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use sodiumoxide::crypto::hash;
 use sodiumoxide::crypto::pwhash;
+#[cfg(test)]
+pub mod test_session;
 
 #[derive(Clone, Debug)]
-pub struct AuthServiceDomain<A: AuthStorePort, B: AuthConfigPort> {
+pub struct AuthServiceDomain<A: AuthStorePort> {
     auth_store: A,
-    auth_config: B,
+    day0_token_lifetime: time::Duration,
+    session_lifetime: time::Duration,
+    jwt_signing_secret: String,
 }
 
-impl<A, B> AuthServiceDomain<A, B>
+impl<A> AuthServiceDomain<A>
 where
     A: AuthStorePort + Send + Sync,
-    B: AuthConfigPort + Send + Sync,
 {
-    pub fn new(store: A, config: B) -> Self {
+    pub fn new(
+        store: A,
+        day0_token_lifetime: time::Duration,
+        session_lifetime: time::Duration,
+        jwt_signing_secret: String,
+    ) -> Self {
         AuthServiceDomain {
             auth_store: store,
-            auth_config: config,
+            day0_token_lifetime,
+            session_lifetime,
+            jwt_signing_secret,
         }
     }
 }
 
 #[async_trait::async_trait]
-impl<A, B> AuthServicePort for AuthServiceDomain<A, B>
+impl<A> AuthServicePort for AuthServiceDomain<A>
 where
     A: AuthStorePort + Send + Sync,
-    B: AuthConfigPort + Send + Sync,
 {
     async fn set_day0_token(&self, token: &Token) -> Result<(), AuthServiceError> {
         match self.auth_store.set_day0_token(token).await {
@@ -52,7 +60,7 @@ where
         credential: &Credential,
         token: &Token,
     ) -> Result<UserId, AuthServiceError> {
-        let lifetime = self.auth_config.day0_token_lifetime().await;
+        let lifetime = self.day0_token_lifetime;
         let roles: Vec<Roles> = vec![Roles::Default, Roles::Admin];
         let pwh = pwhash::pwhash(
             &credential.password.clone().into_bytes(),
@@ -118,8 +126,7 @@ where
         &self,
         user_id: &UserId,
     ) -> Result<SessionToken, AuthServiceError> {
-        let secret = self.auth_config.jwt_signing_secret().await;
-        let session_lifetime = self.auth_config.session_lifetime().await;
+        let session_lifetime = self.session_lifetime;
 
         let now = time::OffsetDateTime::now_utc();
         let mut buf = [0u8; 32];
@@ -136,7 +143,7 @@ where
         let token = encode(
             &Header::default(),
             &session_token_claims,
-            &EncodingKey::from_secret(secret.as_ref()),
+            &EncodingKey::from_secret(self.jwt_signing_secret.as_ref()),
         )
         .unwrap();
         self.auth_store
@@ -150,10 +157,9 @@ where
         &self,
         session_token: &SessionToken,
     ) -> Result<UserId, AuthServiceError> {
-        let secret = self.auth_config.jwt_signing_secret().await;
         match decode::<SessionTokenClaims>(
             &session_token,
-            &DecodingKey::from_secret(secret.as_ref()),
+            &DecodingKey::from_secret(self.jwt_signing_secret.as_ref()),
             &Validation::default(),
         ) {
             Ok(token_data) => {

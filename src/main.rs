@@ -22,11 +22,21 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_host = auth_config_env.db_host().await;
     let db_port = auth_config_env.db_port().await;
     let db_name = auth_config_env.db_name().await;
+
     let auth_store_pg =
         AuthStorePgAdapter::new(&db_user, &db_pwd, &db_host, &db_port.to_string(), &db_name).await;
 
+    let day0_token_lifetime = auth_config_env.day0_token_lifetime().await;
+    let session_lifetime = auth_config_env.session_lifetime().await;
+    let jwt_signing_secret = auth_config_env.jwt_signing_secret().await;
+
     //setup the authentication service
-    let auth_service = AuthServiceDomain::new(auth_store_pg.clone(), auth_config_env.clone());
+    let auth_service = AuthServiceDomain::new(
+        auth_store_pg.clone(),
+        day0_token_lifetime,
+        session_lifetime,
+        jwt_signing_secret,
+    );
 
     //set the day0 token/password for intial registration
     let day0_token = auth_config_env.day0_token().await;

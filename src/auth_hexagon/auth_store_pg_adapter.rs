@@ -11,6 +11,8 @@ pub mod pg_error_mapping;
 pub mod pg_queries;
 pub mod pg_queries_credential;
 pub mod pg_queries_session;
+#[cfg(test)]
+pub mod test_utils;
 
 #[derive(Clone, Debug)]
 pub struct AuthStorePgAdapter {
@@ -211,38 +213,14 @@ impl core::convert::From<sqlx::Error> for AuthStoreError {
 mod tests {
 
     use sodiumoxide::crypto::pwhash;
-    use uuid::Uuid;
+    use test_utils::pg_store_init;
 
     use super::*;
-    async fn init(test_name: &str) -> Box<dyn AuthStorePort> {
-        dotenv::dotenv().ok();
-
-        let _ = env_logger::builder().is_test(true).try_init();
-        let db_user = std::env::var("DB_USER").unwrap_or("pgadmin".into());
-        let db_pwd = std::env::var("DB_PWD").unwrap_or("secret".into());
-        let db_host = std::env::var("DB_HOST").unwrap_or("localhost".into());
-        let db_port = std::env::var("DB_PORT").unwrap_or("5432".into());
-        let db_name = std::env::var("DB_NAME").unwrap_or("schocken".into());
-        let test_exe_id = Uuid::new_v4().to_string().replace("-", "");
-
-        let test_db_name = format!("{}_{}", test_name, test_exe_id);
-        let name = if test_db_name.len() > 63 {
-            &test_db_name[..63]
-        } else {
-            &test_db_name[..]
-        };
-        println!("DB Name: {}", name);
-        AuthStorePgAdapter::create_db(&db_user, &db_pwd, &db_host, &db_port, &db_name, &name)
-            .await
-            .unwrap();
-        let store = AuthStorePgAdapter::new(&db_user, &db_pwd, &db_host, &db_port, &name).await;
-        Box::new(store)
-    }
 
     #[actix_web::main]
     #[test]
     async fn test_day0_registration_success() {
-        let store = init("test_day0_registration_success").await;
+        let store = pg_store_init("test_day0_registration_success").await;
 
         let user = UserProfile {
             first_name: "John".into(),
@@ -288,7 +266,7 @@ mod tests {
     #[actix_web::main]
     #[test]
     async fn test_set_day0_token_twice() {
-        let store = init("test_set_day0_token_twice").await;
+        let store = pg_store_init("test_set_day0_token_twice").await;
 
         let token: Token = "1234567890".into();
 
@@ -307,7 +285,7 @@ mod tests {
     #[actix_web::main]
     #[test]
     async fn test_day0_registration_with_unknown_token() {
-        let store = init("test_day0_registration_with_unknown_token").await;
+        let store = pg_store_init("test_day0_registration_with_unknown_token").await;
 
         let user = UserProfile {
             first_name: "John".into(),
@@ -358,7 +336,7 @@ mod tests {
     #[actix_web::main]
     #[test]
     async fn test_auth_password() {
-        let store = init("test_auth_password").await;
+        let store = pg_store_init("test_auth_password").await;
 
         let user = UserProfile {
             first_name: "John".into(),
@@ -433,7 +411,7 @@ mod tests {
     #[actix_web::main]
     #[test]
     async fn test_session() {
-        let store = init("test_session").await;
+        let store = pg_store_init("test_session").await;
         match store.set_session_id(&5, "s1").await {
             Ok(_) => assert!(true),
             Err(_) => assert!(false),

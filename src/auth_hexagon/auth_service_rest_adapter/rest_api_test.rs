@@ -1,11 +1,13 @@
 use mock_it::verify;
 use mock_it::Matcher::*;
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
 use super::super::auth_config_env_adapter::AuthConfigEnvAdapter;
 use super::super::auth_config_port::*;
 use super::super::auth_service_mock::AuthServiceMock;
+use super::super::auth_types::*;
 use super::*;
 
 #[derive(Debug, Clone)]
