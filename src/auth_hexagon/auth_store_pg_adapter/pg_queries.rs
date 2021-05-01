@@ -158,7 +158,7 @@ UPDATE day0_token SET valid = false WHERE token = $1;
 pub async fn create_user_id(pool: Arc<Pool<Postgres>>) -> Result<UserId, AuthStoreError> {
     #[derive(sqlx::FromRow, Debug)]
     struct UserIdRes {
-        user_id: UserId,
+        user_id: i64,
     }
 
     let rec: PgRow = sqlx::query(
@@ -169,7 +169,7 @@ INSERT INTO user_id (user_id) VALUES (DEFAULT) RETURNING user_id;
     .fetch_one(&*pool)
     .await?;
     let u: UserIdRes = FromRow::from_row(&rec).unwrap();
-    Ok(u.user_id)
+    Ok(UserId(u.user_id))
 }
 
 pub async fn insert_credential(
@@ -184,7 +184,7 @@ INSERT INTO credentials ( user_id, login_name, pwd_hash)
 VALUES ( $1 , $2, $3);
         "#,
     )
-    .bind(&user_id)
+    .bind(&user_id.0)
     .bind(login_name)
     .bind(password_hash)
     .execute(&*pool)
@@ -222,7 +222,7 @@ INSERT INTO user_profile ( user_id, email, first_name, last_name )
 VALUES ( $1 , $2, $3, $4);
         "#,
     )
-    .bind(&user_id)
+    .bind(&user_id.0)
     .bind(&user.email)
     .bind(&user.first_name)
     .bind(&user.last_name)
@@ -261,7 +261,7 @@ INSERT INTO role_binding ( binding_id, user_id, role_name )
 VALUES ( DEFAULT , $1, $2);
             "#,
         )
-        .bind(&user_id)
+        .bind(&user_id.0)
         .bind(&role.to_string())
         .execute(&*pool)
         //.fetch_one(&pool)

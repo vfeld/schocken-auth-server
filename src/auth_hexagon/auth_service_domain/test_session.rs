@@ -3,6 +3,7 @@ use mock_it::Matcher;
 use crate::auth_hexagon::auth_service_port::AuthServicePort;
 
 use super::super::auth_store_mock::AuthStoreMock;
+use super::super::auth_types::*;
 use super::AuthServiceDomain;
 
 #[actix_web::main]
@@ -12,7 +13,7 @@ async fn test_session_token() {
     store
         .get_user_id_by_session_id
         .given(Matcher::Any)
-        .will_return(Ok(Some(7i64)));
+        .will_return(Ok(Some(UserId(7))));
 
     let auth_service_123_100 = AuthServiceDomain::new(
         store.clone(),
@@ -21,8 +22,8 @@ async fn test_session_token() {
         "123".into(),
     );
 
-    let token_123_100 = match auth_service_123_100.create_session_token(&7).await {
-        Ok(token) => token,
+    let token_123_100 = match auth_service_123_100.create_session_token(&UserId(7)).await {
+        Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
             "".into()
@@ -36,8 +37,8 @@ async fn test_session_token() {
         "123".into(),
     );
 
-    let token_123_0 = match auth_service_123_0.create_session_token(&7).await {
-        Ok(token) => token,
+    let token_123_0 = match auth_service_123_0.create_session_token(&UserId(7)).await {
+        Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
             "".into()
@@ -51,8 +52,8 @@ async fn test_session_token() {
         "456".into(),
     );
 
-    let token_456_100 = match auth_service_456_100.create_session_token(&7).await {
-        Ok(token) => token,
+    let token_456_100 = match auth_service_456_100.create_session_token(&UserId(7)).await {
+        Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
             "".into()
@@ -106,8 +107,8 @@ async fn test_session_token() {
         "123".into(),
     );
 
-    let token_123_100 = match auth_service_123_100.create_session_token(&7).await {
-        Ok(token) => token,
+    let token_123_100 = match auth_service_123_100.create_session_token(&UserId(7)).await {
+        Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
             "".into()
@@ -129,7 +130,7 @@ async fn test_session_token() {
         }
     }
     //delete token
-    match auth_service_123_100.delete_session_token(&7).await {
+    match auth_service_123_100.delete_session_token(&UserId(7)).await {
         Ok(_) => {
             assert!(true)
         }

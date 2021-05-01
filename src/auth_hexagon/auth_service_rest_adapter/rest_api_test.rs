@@ -1,13 +1,8 @@
-use mock_it::verify;
-use mock_it::Matcher::*;
-use serde::Deserialize;
-use serde_json::json;
 use std::sync::{Arc, Mutex};
 
 use super::super::auth_config_env_adapter::AuthConfigEnvAdapter;
 use super::super::auth_config_port::*;
 use super::super::auth_service_mock::AuthServiceMock;
-use super::super::auth_types::*;
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -70,6 +65,10 @@ impl ApiTestDriver {
     pub fn get(&self, path: &str) -> reqwest::RequestBuilder {
         self.client.get(self.hosturl.clone() + path)
     }
+
+    pub fn delete(&self, path: &str) -> reqwest::RequestBuilder {
+        self.client.delete(self.hosturl.clone() + path)
+    }
 }
 
 pub fn init() {
@@ -80,6 +79,15 @@ pub fn init() {
 use lazy_static::lazy_static;
 lazy_static! {
     pub static ref COUNTER: Counter = Counter::new(0);
+}
+
+pub fn get_cookie(resp: &reqwest::Response, name: String) -> Option<reqwest::cookie::Cookie> {
+    for cookie in resp.cookies() {
+        if cookie.name() == name {
+            return Some(cookie);
+        }
+    }
+    None
 }
 
 #[actix_web::main]
@@ -96,97 +104,4 @@ pub async fn test_not_found() {
     let resp = api.get("/api/doesnotexist").send().await.unwrap();
 
     assert!(resp.status() == StatusCode::NOT_FOUND);
-}
-
-#[actix_web::main]
-#[test]
-pub async fn test_register_day0() {
-    //test configuration
-    init();
-    let token = "1234567890";
-    let profile = UserProfile {
-        first_name: "John".into(),
-        last_name: "Doe".into(),
-        email: "john.doe@example.local".into(),
-    };
-    let cred = Credential {
-        login_name: "john.doe+login@example.local".into(),
-        password: "secret".into(),
-    };
-    let uid = 3i64;
-
-    let auth_service = AuthServiceMock::new();
-    auth_service
-        .day0_registration
-        .given(Any)
-        .will_return(Ok(uid));
-
-    let api = ApiTestDriver::new(auth_service.clone()).await;
-
-    //test execution
-    let resp = api
-        .post("/api/token/day0")
-        .json(&json!({
-            "token": token,
-            "login_name":cred.login_name,
-            "password":cred.password,
-            "email":profile.email,
-            "first_name":profile.first_name,
-            "last_name":profile.last_name}))
-        .send()
-        .await
-        .unwrap();
-
-    //test verdict
-    #[derive(Deserialize)]
-    struct TestResponse {
-        uid: i64,
-    }
-    assert!(resp.status() == StatusCode::OK);
-    assert!(resp.json::<TestResponse>().await.unwrap().uid == uid);
-    let d = Val((profile, cred, token.to_string()));
-    assert!(verify(
-        auth_service.day0_registration.was_called_with(d).times(1)
-    ));
-}
-#[actix_web::main]
-#[test]
-pub async fn test_register_day0_corrupted_request() {
-    //test configuration
-    init();
-    let token = "1234567890";
-    let profile = UserProfile {
-        first_name: "John".into(),
-        last_name: "Doe".into(),
-        email: "john.doe@example.local".into(),
-    };
-    let cred = Credential {
-        login_name: "john.doe+login@example.local".into(),
-        password: "secret".into(),
-    };
-
-    let auth_service = AuthServiceMock::new();
-
-    let api = ApiTestDriver::new(auth_service.clone()).await;
-
-    //test execution
-    let resp = api
-        .post("/api/token/day0")
-        .json(&json!({
-            "token": token,
-            "password":cred.password,
-            "email":profile.email,
-            "first_name":profile.first_name,
-            "last_name":profile.last_name}))
-        .send()
-        .await
-        .unwrap();
-
-    //test verdict
-    #[derive(Deserialize)]
-    struct TestResponse {
-        reason: String,
-    }
-    assert!(resp.status() == StatusCode::CONFLICT);
-    assert!(resp.json::<TestResponse>().await.unwrap().reason == "JsonPayloadError");
 }

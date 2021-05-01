@@ -2,8 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 pub type Token = String;
-pub type UserId = i64;
 pub type SessionToken = String;
+pub type CsrfToken = String;
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct UserId(pub i64);
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct ValidateCsrf;
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct UserProfile {
@@ -12,7 +18,7 @@ pub struct UserProfile {
     pub email: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Credential {
     pub login_name: String,
     pub password: String,

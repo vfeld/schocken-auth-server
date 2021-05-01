@@ -10,6 +10,8 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use sodiumoxide::crypto::hash;
 use sodiumoxide::crypto::pwhash;
 #[cfg(test)]
+pub mod test_csrf;
+#[cfg(test)]
 pub mod test_session;
 
 #[derive(Clone, Debug)]
@@ -125,7 +127,7 @@ where
     async fn create_session_token(
         &self,
         user_id: &UserId,
-    ) -> Result<SessionToken, AuthServiceError> {
+    ) -> Result<(SessionToken, time::OffsetDateTime), AuthServiceError> {
         let session_lifetime = self.session_lifetime;
 
         let now = time::OffsetDateTime::now_utc();
@@ -150,7 +152,7 @@ where
             .set_session_id(&user_id, &session_id)
             .await?;
 
-        Ok(token)
+        Ok((token, now + session_lifetime))
     }
 
     async fn auth_session_token(
@@ -211,5 +213,11 @@ where
         self.auth_store.delete_session_id(user_id).await?;
 
         Ok(())
+    }
+
+    async fn create_csrf_token(&self) -> Result<CsrfToken, AuthServiceError> {
+        let mut buf = [0u8; 32];
+        getrandom::getrandom(&mut buf).unwrap();
+        Ok(base64::encode(hash::sha256::hash(&buf).as_ref()))
     }
 }

@@ -113,9 +113,10 @@ impl AuthStorePort for AuthStorePgAdapter {
         }
 
         let user_id = pg_queries::create_user_id(pool.clone()).await?;
-        pg_queries::insert_credential(pool.clone(), user_id, login_name, password_hash).await?;
-        pg_queries::insert_user_profile(pool.clone(), user_id, user).await?;
-        pg_queries::insert_roles(pool.clone(), user_id, &roles).await?;
+        pg_queries::insert_credential(pool.clone(), user_id.clone(), login_name, password_hash)
+            .await?;
+        pg_queries::insert_user_profile(pool.clone(), user_id.clone(), user).await?;
+        pg_queries::insert_roles(pool.clone(), user_id.clone(), &roles).await?;
         pg_queries::invalidate_day0_token(pool.clone(), token).await?;
 
         tx.commit().await?;
@@ -412,7 +413,7 @@ mod tests {
     #[test]
     async fn test_session() {
         let store = pg_store_init("test_session").await;
-        match store.set_session_id(&5, "s1").await {
+        match store.set_session_id(&UserId(5), "s1").await {
             Ok(_) => assert!(true),
             Err(_) => assert!(false),
         }
@@ -423,7 +424,7 @@ mod tests {
         }
         match store.get_user_id_by_session_id("s1").await {
             Ok(Some(u)) => {
-                if u == 5 {
+                if u == UserId(5) {
                     assert!(true)
                 } else {
                     assert!(false)
@@ -432,11 +433,11 @@ mod tests {
             Ok(None) => assert!(false),
             Err(_) => assert!(false),
         }
-        match store.delete_session_id(&1).await {
+        match store.delete_session_id(&UserId(1)).await {
             Ok(_) => assert!(true),
             Err(_) => assert!(false),
         }
-        match store.delete_session_id(&5).await {
+        match store.delete_session_id(&UserId(5)).await {
             Ok(_) => assert!(true),
             Err(_) => assert!(false),
         }

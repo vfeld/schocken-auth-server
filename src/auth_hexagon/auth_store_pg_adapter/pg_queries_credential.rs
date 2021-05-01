@@ -23,9 +23,9 @@ SELECT user_id, pwd_hash FROM credentials WHERE login_name = $1;
     .await;
     match res {
         Ok(row) => {
-            let user_id: UserId = row.try_get("user_id")?;
+            let user_id: i64 = row.try_get("user_id")?;
             let pwd_hash: Vec<u8> = row.try_get("pwd_hash")?;
-            Ok((user_id, pwd_hash))
+            Ok((UserId(user_id), pwd_hash))
         }
         Err(err) => {
             match filter_user_error(&err) {

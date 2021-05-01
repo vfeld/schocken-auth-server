@@ -17,12 +17,13 @@ pub trait AuthServicePort {
     async fn create_session_token(
         &self,
         user_id: &UserId,
-    ) -> Result<SessionToken, AuthServiceError>;
+    ) -> Result<(SessionToken, time::OffsetDateTime), AuthServiceError>;
     async fn auth_session_token(
         &self,
         session_token: &SessionToken,
     ) -> Result<UserId, AuthServiceError>;
     async fn delete_session_token(&self, user_id: &UserId) -> Result<(), AuthServiceError>;
+    async fn create_csrf_token(&self) -> Result<CsrfToken, AuthServiceError>;
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,7 @@ pub enum AuthServiceError {
     UserAlreadyExists(String, String),
     InvalidOneTimeToken(String, String),
     Unauthorized(String, String),
+    InvalidCsrfToken(String, String),
 }
 
 impl std::fmt::Display for AuthServiceError {
@@ -60,6 +62,9 @@ impl std::fmt::Display for AuthServiceError {
             AuthServiceError::Unauthorized(eid, details) => {
                 format!("eid: {}, slogan: Unauthorized, details: {}", eid, details)
             }
+            AuthServiceError::InvalidCsrfToken(eid, details) => {
+                format!("eid: {}, slogan: Unauthorized, details: {}", eid, details)
+            }
         };
         f.write_str(&error)
     }
@@ -74,6 +79,7 @@ impl AuthServiceError {
             AuthServiceError::UserAlreadyExists(eid, _) => eid,
             AuthServiceError::InvalidOneTimeToken(eid, _) => eid,
             AuthServiceError::Unauthorized(eid, _) => eid,
+            AuthServiceError::InvalidCsrfToken(eid, _) => eid,
         }
     }
 }

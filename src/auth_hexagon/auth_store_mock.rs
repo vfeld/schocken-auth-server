@@ -34,8 +34,8 @@ impl AuthStoreMock {
     pub fn new() -> Self {
         AuthStoreMock {
             set_day0_token: Mock::new(Ok(())),
-            day0_registration: Mock::new(Ok(0)),
-            get_pwd_hash: Mock::new(Ok((0, vec![]))),
+            day0_registration: Mock::new(Ok(UserId(0))),
+            get_pwd_hash: Mock::new(Ok((UserId(0), vec![]))),
             set_session_id: Mock::new(Ok(())),
             get_user_id_by_session_id: Mock::new(Ok(None)),
             delete_session_id: Mock::new(Ok(())),

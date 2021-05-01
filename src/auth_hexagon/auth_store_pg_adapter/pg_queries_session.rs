@@ -20,7 +20,7 @@ INSERT INTO session ( user_id, session_id)
 VALUES ( $1 , $2);
         "#,
     )
-    .bind(user_id)
+    .bind(user_id.0)
     .bind(session_id)
     .execute(&*pool)
     .await;
@@ -72,8 +72,8 @@ SELECT user_id FROM session WHERE session_id = $1;
     .await;
     match res {
         Ok(row) => {
-            let user_id: UserId = row.try_get("user_id")?;
-            Ok(Some(user_id))
+            let user_id: i64 = row.try_get("user_id")?;
+            Ok(Some(UserId(user_id)))
         }
         Err(err) => {
             match filter_user_error(&err) {
@@ -98,7 +98,7 @@ pub async fn delete_session(
 DELETE FROM session WHERE user_id = $1;
         "#,
     )
-    .bind(&user_id)
+    .bind(&user_id.0)
     .execute(&*pool)
     .await;
     match res {
