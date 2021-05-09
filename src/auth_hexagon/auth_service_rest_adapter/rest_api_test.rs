@@ -42,9 +42,10 @@ impl ApiTestDriver {
 
         let hosturl = format!("http://{}:{}", host, port);
 
-        let server = AuthServiceRestAdapter::new(&host, &port.to_string(), service)
-            .run()
-            .await;
+        let server =
+            AuthServiceRestAdapter::new(&host, &port.to_string(), service, hosturl.clone())
+                .run()
+                .await;
 
         let client = reqwest::Client::builder()
             //.http2_prior_knowledge()
@@ -68,6 +69,10 @@ impl ApiTestDriver {
 
     pub fn delete(&self, path: &str) -> reqwest::RequestBuilder {
         self.client.delete(self.hosturl.clone() + path)
+    }
+
+    pub fn put(&self, path: &str) -> reqwest::RequestBuilder {
+        self.client.put(self.hosturl.clone() + path)
     }
 }
 

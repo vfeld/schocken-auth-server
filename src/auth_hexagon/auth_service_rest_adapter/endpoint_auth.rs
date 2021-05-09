@@ -15,10 +15,10 @@ where
     let (token, expires) = service.create_session_token(&user_id).await?;
     Ok(HttpResponse::Ok()
         .cookie(
-            http::Cookie::build("SCHOCKEN_SESSION", token)
+            http::Cookie::build("_Host-SCHOCKEN_SESSION", token)
                 .http_only(true)
                 .secure(true)
-                .same_site(cookie::SameSite::Strict)
+                .same_site(cookie::SameSite::None)
                 .expires(expires)
                 .finish(),
         )
@@ -87,7 +87,7 @@ mod test {
         let resp = api
             .post("/api/auth/session")
             .header("X-Csrf-Token", "csrftoken")
-            .header(COOKIE, "SCHOCKEN_CSRF=csrftoken;")
+            .header(COOKIE, "_Host-SCHOCKEN_CSRF=csrftoken;")
             .json(&json!({
                 "login_name": "John",
                 "password":"secret"}))
@@ -97,11 +97,10 @@ mod test {
 
         //test verdict
         assert!(resp.status() == StatusCode::OK);
-        let session_cookie = get_cookie(&resp, "SCHOCKEN_SESSION".to_string()).unwrap();
+        let session_cookie = get_cookie(&resp, "_Host-SCHOCKEN_SESSION".to_string()).unwrap();
         assert!(session_cookie.value() == "sessiontoken");
         assert!(session_cookie.http_only());
         assert!(session_cookie.secure());
-        assert!(session_cookie.same_site_strict());
         assert!(session_cookie.expires() != None);
     }
     #[actix_web::main]
@@ -133,7 +132,7 @@ mod test {
         let resp = api
             .post("/api/auth/session")
             .header("X-Csrf-Token", "csrftoken")
-            .header(COOKIE, "SCHOCKEN_CSRF=csrftoken;")
+            .header(COOKIE, "_Host-SCHOCKEN_CSRF=csrftoken;")
             .json(&json!({
                 "login_name": "John",
                 "password":"secret"}))
@@ -163,7 +162,7 @@ mod test {
         //test execution
         let resp = api
             .get("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
             .send()
             .await
             .unwrap();
@@ -210,7 +209,7 @@ mod test {
         //test execution
         let resp = api
             .get("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
             .send()
             .await
             .unwrap();
@@ -235,9 +234,9 @@ mod test {
         //test execution
         let resp = api
             .delete("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
             .header("X-Csrf-Token", "csrftoken")
-            .header(COOKIE, "SCHOCKEN_CSRF=csrftoken;")
+            .header(COOKIE, "_Host-SCHOCKEN_CSRF=csrftoken;")
             .send()
             .await
             .unwrap();
@@ -262,8 +261,8 @@ mod test {
         //test execution
         let resp = api
             .delete("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
-            .header(COOKIE, "SCHOCKEN_CSRF=csrftoken;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_CSRF=csrftoken;")
             .send()
             .await
             .unwrap();
@@ -288,7 +287,7 @@ mod test {
         //test execution
         let resp = api
             .delete("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
             .header("X-Csrf-Token", "csrftoken")
             .send()
             .await
@@ -314,9 +313,9 @@ mod test {
         //test execution
         let resp = api
             .delete("/api/auth/session")
-            .header(COOKIE, "SCHOCKEN_SESSION=1234;")
+            .header(COOKIE, "_Host-SCHOCKEN_SESSION=1234;")
             .header("X-Csrf-Token", "csrftoken")
-            .header(COOKIE, "SCHOCKEN_CSRF=csrftoken-1;")
+            .header(COOKIE, "_Host-SCHOCKEN_CSRF=csrftoken-1;")
             .send()
             .await
             .unwrap();

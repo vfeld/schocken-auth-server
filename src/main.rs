@@ -45,9 +45,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //setup the http server
     let host = auth_config_env.host().await;
     let port = auth_config_env.port().await;
-    let server = AuthServiceRestAdapter::new(&host, &port.to_string(), auth_service)
-        .run()
-        .await;
+    let allowed_origin = auth_config_env.allowed_origin().await;
+
+    let server =
+        AuthServiceRestAdapter::new(&host, &port.to_string(), auth_service, allowed_origin)
+            .run()
+            .await;
     info!("http server has started");
 
     server.await?;

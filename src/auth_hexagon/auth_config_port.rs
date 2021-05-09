@@ -11,4 +11,5 @@ pub trait AuthConfigPort {
     async fn port(&self) -> u16;
     async fn session_lifetime(&self) -> time::Duration;
     async fn jwt_signing_secret(&self) -> String;
+    async fn allowed_origin(&self) -> String;
 }

@@ -2,11 +2,14 @@ use std::pin::Pin;
 
 use super::{
     auth_service_port::{AuthServiceError, AuthServicePort},
+    auth_types::AllowedOrigin,
     auth_types::UserId,
     auth_types::ValidateCsrf,
 };
+use actix_cors::Cors;
 use actix_web::{
-    dev::Payload, dev::Server, web::Data, App, FromRequest, HttpMessage, HttpRequest, HttpServer,
+    dev::Payload, dev::Server, http, web::Data, App, FromRequest, HttpMessage, HttpRequest,
+    HttpServer,
 };
 use actix_web::{http::StatusCode, middleware::Logger, web, HttpResponse, ResponseError};
 use futures_util::future::{err, ok, Ready};
@@ -20,15 +23,22 @@ pub mod endpoint_day0;
 #[cfg(test)]
 pub mod rest_api_test;
 
-pub fn configure_service_endpoints<A>(config: &mut web::ServiceConfig, service: A)
-where
+pub fn configure_service_endpoints<A>(
+    config: &mut web::ServiceConfig,
+    service: A,
+    allowed_origin: String,
+) where
     A: AuthServicePort + Send + Sync + 'static,
 {
+    let origin = AllowedOrigin {
+        origin: allowed_origin,
+    };
     config.service(web::scope("/api").configure(|config| {
         config.data(service);
+        config.data(origin);
         config.route(
-            "/token/day0",
-            web::post().to(endpoint_day0::day0_registration::<A>),
+            "/register/day0/{token}",
+            web::put().to(endpoint_day0::day0_registration::<A>),
         );
         config.route(
             "/auth/session",
@@ -42,12 +52,22 @@ where
             "/auth/session",
             web::delete().to(endpoint_auth::auth_session_delete::<A>),
         );
-        config.route("/csrf", web::get().to(endpoint_csrf::csrf_create::<A>));
+        config.route("/csrf", web::get().to(endpoint_csrf::csrf_page::<A>));
     }));
 }
 
 pub fn logger_middleware() -> Logger {
     Logger::default()
+}
+
+pub fn cors_middleware(allowed_origin: String) -> Cors {
+    Cors::default()
+        .allowed_origin(&allowed_origin)
+        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+        .supports_credentials()
+        .allowed_header(http::header::CONTENT_TYPE)
+        .allowed_header(http::HeaderName::from_static("x-csrf-token"))
+        .max_age(60)
 }
 
 pub fn json_config() -> web::JsonConfig {
@@ -73,29 +93,35 @@ where
     host: String,
     port: String,
     service: A,
+    allowed_origin: String,
 }
 
 impl<A> AuthServiceRestAdapter<A>
 where
     A: AuthServicePort + Send + Sync + Clone + 'static,
 {
-    pub fn new(host: &str, port: &str, service: A) -> Self {
+    pub fn new(host: &str, port: &str, service: A, allowed_origin: String) -> Self {
         AuthServiceRestAdapter {
             host: host.into(),
             port: port.into(),
             service,
+            allowed_origin,
         }
     }
 
     pub async fn run(&self) -> Server {
         let service = self.service.clone(); //decouple lifetime of service from self
         let address = format!("{}:{}", self.host, self.port);
+        let allowed_origin = self.allowed_origin.clone();
         HttpServer::new(move || {
             App::new()
                 .app_data(json_config())
                 .app_data::<Data<Box<dyn AuthServicePort>>>(Data::new(Box::new(service.clone())))
+                .wrap(cors_middleware(allowed_origin.clone()))
                 .wrap(logger_middleware())
-                .configure(|config| configure_service_endpoints(config, service.clone()))
+                .configure(|config| {
+                    configure_service_endpoints(config, service.clone(), allowed_origin.clone())
+                })
         })
         .bind(address)
         .expect("Unable to bind server")
@@ -140,7 +166,7 @@ impl FromRequest for UserId {
             .app_data::<Data<Box<dyn AuthServicePort>>>()
             .unwrap()
             .to_owned();
-        if let Some(session) = req.cookie("SCHOCKEN_SESSION") {
+        if let Some(session) = req.cookie("_Host-SCHOCKEN_SESSION") {
             let u = Box::pin(async move { data.auth_session_token(&session.to_string()).await });
             return u;
         }
@@ -189,11 +215,11 @@ impl FromRequest for ValidateCsrf {
             }
         };
 
-        let csrf_cookie = match req.cookie("SCHOCKEN_CSRF") {
+        let csrf_cookie = match req.cookie("_Host-SCHOCKEN_CSRF") {
             Some(token) => token,
             None => {
                 let uuid = uuid::Uuid::new_v4();
-                let details = "SCHOCKEN_CSRF cookie missing";
+                let details = "_Host-SCHOCKEN_CSRF cookie missing";
                 error!("eid: {}, details: {}", uuid, details);
                 return err(AuthServiceError::InvalidCsrfToken(
                     uuid.to_string(),

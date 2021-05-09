@@ -1,12 +1,10 @@
 use super::super::{auth_service_port::AuthServicePort, auth_types::*};
 use actix_web::error::Error;
-use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterUser {
-    pub token: String,
     pub login_name: String,
     pub password: String,
     pub email: String,
@@ -15,12 +13,14 @@ pub struct RegisterUser {
 }
 
 pub async fn day0_registration<A>(
+    token: web::Path<(String,)>,
     user: web::Json<RegisterUser>,
     service: web::Data<A>,
 ) -> Result<HttpResponse, Error>
 where
     A: AuthServicePort,
 {
+    let token = token.into_inner().0;
     let user = user.into_inner();
     let profile = UserProfile {
         first_name: user.first_name,
@@ -31,10 +31,10 @@ where
         login_name: user.login_name,
         password: user.password,
     };
-    let uid = service
-        .day0_registration(&profile, &credential, &user.token)
+    service
+        .day0_registration(&profile, &credential, &token)
         .await?;
-    Ok(HttpResponse::build(StatusCode::OK).json(json!({ "uid": uid.0 })))
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[cfg(test)]
@@ -76,9 +76,8 @@ mod test {
 
         //test execution
         let resp = api
-            .post("/api/token/day0")
+            .put(&format!("/api/register/day0/{}", token))
             .json(&json!({
-            "token": token,
             "login_name":cred.login_name,
             "password":cred.password,
             "email":profile.email,
@@ -88,13 +87,7 @@ mod test {
             .await
             .unwrap();
 
-        //test verdict
-        #[derive(Deserialize)]
-        struct TestResponse {
-            uid: i64,
-        }
         assert!(resp.status() == StatusCode::OK);
-        assert!(resp.json::<TestResponse>().await.unwrap().uid == uid);
         let d = Val((profile, cred, token.to_string()));
         assert!(verify(
             auth_service.day0_registration.was_called_with(d).times(1)
@@ -122,9 +115,8 @@ mod test {
 
         //test execution
         let resp = api
-            .post("/api/token/day0")
+            .put(&format!("/api/register/day0/{}", token))
             .json(&json!({
-            "token": token,
             "password":cred.password,
             "email":profile.email,
             "first_name":profile.first_name,

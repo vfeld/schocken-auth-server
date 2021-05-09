@@ -67,4 +67,8 @@ impl AuthConfigPort for AuthConfigEnvAdapter {
     async fn jwt_signing_secret(&self) -> String {
         env::var("JWT_SIGNING_SECRET").expect("A JWT signing secret must be set")
     }
+
+    async fn allowed_origin(&self) -> String {
+        env::var("ALLOWED_ORIGIN").expect("ALLOWED_ORIGIN must be set")
+    }
 }

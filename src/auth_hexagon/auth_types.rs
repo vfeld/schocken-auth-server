@@ -12,6 +12,11 @@ pub struct UserId(pub i64);
 pub struct ValidateCsrf;
 
 #[derive(Default, Debug, Clone, PartialEq)]
+pub struct AllowedOrigin {
+    pub origin: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct UserProfile {
     pub first_name: String,
     pub last_name: String,
