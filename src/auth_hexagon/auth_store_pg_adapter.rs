@@ -135,21 +135,7 @@ impl AuthStorePort for AuthStorePgAdapter {
     ) -> Result<(), AuthStoreError> {
         let pool = self.pool.clone();
         let tx = pool.begin().await?;
-        match pg_queries_session::find_user_id_by_session_id(pool.clone(), session_id).await? {
-            Some(found_user_id) => {
-                if &found_user_id != user_id {
-                    let uuid = uuid::Uuid::new_v4();
-                    let details = "session id, user_id mismatch";
-                    error!("eid: {}, details: {}", uuid, details);
-                    return Err(AuthStoreError::InvalidSessionId(
-                        uuid.to_string(),
-                        details.into(),
-                    ));
-                }
-                pg_queries_session::delete_session(pool.clone(), user_id).await?;
-            }
-            None => {}
-        }
+        let _res = pg_queries_session::delete_session(pool.clone(), user_id).await;
         pg_queries_session::insert_session_id(pool.clone(), user_id, session_id).await?;
         tx.commit().await?;
         Ok(())
