@@ -45,7 +45,16 @@ where
     A: AuthServicePort,
 {
     service.delete_session_token(&user_id).await?;
-    Ok(HttpResponse::build(StatusCode::OK).finish())
+    Ok(HttpResponse::build(StatusCode::OK)
+        .cookie(
+            http::Cookie::build("_Host-SCHOCKEN_SESSION", "deleted")
+                .http_only(true)
+                .secure(true)
+                .same_site(cookie::SameSite::None)
+                .expires(time::OffsetDateTime::from_unix_timestamp(0))
+                .finish(),
+        )
+        .finish())
 }
 
 #[cfg(test)]

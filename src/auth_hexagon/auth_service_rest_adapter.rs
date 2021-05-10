@@ -166,7 +166,8 @@ impl FromRequest for UserId {
             .app_data::<Data<Box<dyn AuthServicePort>>>()
             .unwrap()
             .to_owned();
-        if let Some(session) = req.cookie("_Host-SCHOCKEN_SESSION") {
+        if let Some(cookie) = req.cookie("_Host-SCHOCKEN_SESSION") {
+            let session = cookie.value().to_owned();
             let u = Box::pin(async move { data.auth_session_token(&session.to_string()).await });
             return u;
         }
