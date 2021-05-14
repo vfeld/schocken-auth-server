@@ -21,9 +21,12 @@ pub trait AuthServicePort {
     async fn auth_session_token(
         &self,
         session_token: &SessionToken,
-    ) -> Result<UserId, AuthServiceError>;
+    ) -> Result<(UserId, time::OffsetDateTime), AuthServiceError>;
     async fn delete_session_token(&self, user_id: &UserId) -> Result<(), AuthServiceError>;
-    async fn create_csrf_token(&self) -> Result<CsrfToken, AuthServiceError>;
+    async fn create_csrf_token(
+        &self,
+    ) -> Result<(CsrfToken, time::OffsetDateTime), AuthServiceError>;
+    async fn get_user_profile(&self, user_id: &UserId) -> Result<UserProfile, AuthServiceError>;
 }
 
 #[derive(Debug, Clone)]

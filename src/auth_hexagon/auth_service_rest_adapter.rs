@@ -1,9 +1,8 @@
-use std::pin::Pin;
+use crate::auth_hexagon::auth_types::SessionToken;
 
 use super::{
     auth_service_port::{AuthServiceError, AuthServicePort},
     auth_types::AllowedOrigin,
-    auth_types::UserId,
     auth_types::ValidateCsrf,
 };
 use actix_cors::Cors;
@@ -33,7 +32,7 @@ pub fn configure_service_endpoints<A>(
     let origin = AllowedOrigin {
         origin: allowed_origin,
     };
-    config.service(web::scope("/api").configure(|config| {
+    config.service(web::scope("/api/auth").configure(|config| {
         config.data(service);
         config.data(origin);
         config.route(
@@ -41,15 +40,15 @@ pub fn configure_service_endpoints<A>(
             web::put().to(endpoint_day0::day0_registration::<A>),
         );
         config.route(
-            "/auth/session",
+            "/session",
             web::post().to(endpoint_auth::auth_session_create::<A>),
         );
         config.route(
-            "/auth/session",
+            "/session",
             web::get().to(endpoint_auth::auth_session_validate::<A>),
         );
         config.route(
-            "/auth/session",
+            "/session",
             web::delete().to(endpoint_auth::auth_session_delete::<A>),
         );
         config.route("/csrf", web::get().to(endpoint_csrf::csrf_page::<A>));
@@ -156,34 +155,6 @@ impl ResponseError for AuthServiceError {
     }
 }
 
-impl FromRequest for UserId {
-    type Config = ();
-    type Error = AuthServiceError;
-    type Future = Pin<Box<dyn std::future::Future<Output = Result<UserId, AuthServiceError>>>>;
-
-    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let data = req
-            .app_data::<Data<Box<dyn AuthServicePort>>>()
-            .unwrap()
-            .to_owned();
-        if let Some(cookie) = req.cookie("_Host-SCHOCKEN_SESSION") {
-            let session = cookie.value().to_owned();
-            let u = Box::pin(async move { data.auth_session_token(&session.to_string()).await });
-            return u;
-        }
-        let uuid = uuid::Uuid::new_v4();
-        let details = "session is not unauthorized";
-        error!("eid: {}, details: {}", uuid, details);
-        let e = Box::pin(async move {
-            Err(AuthServiceError::Unauthorized(
-                uuid.to_string(),
-                details.to_string(),
-            ))
-        });
-        e
-    }
-}
-
 impl FromRequest for ValidateCsrf {
     type Config = ();
     type Error = AuthServiceError;
@@ -240,5 +211,24 @@ impl FromRequest for ValidateCsrf {
             ));
         }
         ok(ValidateCsrf {})
+    }
+}
+impl FromRequest for SessionToken {
+    type Config = ();
+    type Error = AuthServiceError;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        if let Some(cookie) = req.cookie("_Host-SCHOCKEN_SESSION") {
+            let session = cookie.value().to_owned();
+            return ok(SessionToken(session));
+        }
+        let uuid = uuid::Uuid::new_v4();
+        let details = "session token can not extracted from http request";
+        error!("eid: {}, details: {}", uuid, details);
+        err(AuthServiceError::Unauthorized(
+            uuid.to_string(),
+            details.to_string(),
+        ))
     }
 }

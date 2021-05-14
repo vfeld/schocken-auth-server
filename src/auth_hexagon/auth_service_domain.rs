@@ -63,7 +63,7 @@ where
         token: &Token,
     ) -> Result<UserId, AuthServiceError> {
         let lifetime = self.day0_token_lifetime;
-        let roles: Vec<Roles> = vec![Roles::Default, Roles::Admin];
+        let roles: Vec<Role> = vec![Role::Default, Role::Admin];
         let pwh = pwhash::pwhash(
             &credential.password.clone().into_bytes(),
             pwhash::OPSLIMIT_INTERACTIVE,
@@ -152,15 +152,15 @@ where
             .set_session_id(&user_id, &session_id)
             .await?;
 
-        Ok((token, now + session_lifetime))
+        Ok((SessionToken(token), now + session_lifetime))
     }
 
     async fn auth_session_token(
         &self,
         session_token: &SessionToken,
-    ) -> Result<UserId, AuthServiceError> {
+    ) -> Result<(UserId, time::OffsetDateTime), AuthServiceError> {
         match decode::<SessionTokenClaims>(
-            &session_token,
+            &session_token.0,
             &DecodingKey::from_secret(self.jwt_signing_secret.as_ref()),
             &Validation::default(),
         ) {
@@ -185,7 +185,12 @@ where
                     return Err(AuthServiceError::Unauthorized(eid, details));
                 }
                 match self.auth_store.get_user_id_by_session_id(&claims.sub).await {
-                    Ok(Some(user_id)) => return Ok(user_id),
+                    Ok(Some(user_id)) => {
+                        let expiry = time::OffsetDateTime::from_unix_timestamp(
+                            i64::try_from(claims.exp).unwrap(),
+                        );
+                        return Ok((user_id, expiry));
+                    }
                     Ok(None) => {
                         let uuid = uuid::Uuid::new_v4();
                         let details = format!(
@@ -215,9 +220,24 @@ where
         Ok(())
     }
 
-    async fn create_csrf_token(&self) -> Result<CsrfToken, AuthServiceError> {
+    async fn create_csrf_token(
+        &self,
+    ) -> Result<(CsrfToken, time::OffsetDateTime), AuthServiceError> {
         let mut buf = [0u8; 32];
         getrandom::getrandom(&mut buf).unwrap();
-        Ok(base64::encode(hash::sha256::hash(&buf).as_ref()))
+        let lifetime = self.session_lifetime;
+        let now = time::OffsetDateTime::now_utc();
+
+        Ok((
+            base64::encode(hash::sha256::hash(&buf).as_ref()),
+            now + lifetime,
+        ))
+    }
+
+    async fn get_user_profile(&self, user_id: &UserId) -> Result<UserProfile, AuthServiceError> {
+        self.auth_store
+            .get_user_profile(user_id)
+            .await
+            .map_err(|e| e.into())
     }
 }

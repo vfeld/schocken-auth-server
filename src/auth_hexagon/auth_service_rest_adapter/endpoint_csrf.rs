@@ -10,8 +10,9 @@ pub async fn csrf_page<A>(
 where
     A: AuthServicePort,
 {
-    let token = service.create_csrf_token().await?;
-    let body1 = r#"
+    let (token, expires) = service.create_csrf_token().await?;
+    let body = format!(
+        r#"
 <!DOCTYPE html>
 <html lang="en-US">
 <head>
@@ -20,44 +21,62 @@ where
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <title>CSRF Token Provider</title>
     <script>
-        function getCookie(name) {
-            if (!document.cookie) {
+        const target_origin = '{}';
+        function getCookie(name) {{
+            if (!document.cookie) {{
                 return null;
-            }
+            }}
         
             const xsrfCookies = document.cookie.split(';')
                 .map(c => c.trim())
                 .filter(c => c.startsWith(name + '='));
         
-            if (xsrfCookies.length === 0) {
+            if (xsrfCookies.length === 0) {{
                 return null;
-            }
+            }}
             return decodeURIComponent(xsrfCookies[0].split(/=(.+)/)[1]);
-        }
-"#;
-    let body2 = format!("        const target_origin = '{}';", allowed_origin.origin);
-    let body3 = r#"
-        window.addEventListener("message", (event) => {
+        }}
+        function listenCookieChange(interval = 100) {{
+            let lastToken = getCookie("_Host-SCHOCKEN_CSRF");
+            let id = setInterval(()=> {{
+                const token = getCookie("_Host-SCHOCKEN_CSRF");
+                if (token !== lastToken) {{
+                    try {{
+                        const expiry = getCookie("_Host-SCHOCKEN_CSRF_EXPIRY");
+                        window.parent.postMessage(token, target_origin);                        
+                        clearInterval(id);
+                    }} finally {{
+                        lastToken = token;
+                    }}
+                }}
+            }}, interval);
+        }}
+        window.addEventListener("message", (event) => {{
             if (event.origin !== target_origin)
                 return;
             if (event.data !== 'GET_CSRF_TOKEN')
                 return;
             const token = getCookie("_Host-SCHOCKEN_CSRF");
             window.parent.postMessage(token, target_origin);
-        }, false);
-        const token = getCookie("_Host-SCHOCKEN_CSRF");
-        window.parent.postMessage(token, target_origin);
+        }}, false);
+        listenCookieChange();
     </script>
 </head>
 </html>
-"#;
-    let body = format!("{}{}{}", body1, body2, body3);
+"#,
+        allowed_origin.origin
+    );
     Ok(HttpResponse::Ok()
         .cookie(
-            http::Cookie::build("_Host-SCHOCKEN_CSRF", token)
-                .secure(true)
-                .same_site(cookie::SameSite::None)
-                .finish(),
+            http::Cookie::build(
+                "_Host-SCHOCKEN_CSRF",
+                format!("{}_{}", token, expires.unix_timestamp()),
+            )
+            .path("/api/auth")
+            .secure(true)
+            .expires(expires)
+            .same_site(cookie::SameSite::None)
+            .finish(),
         )
         .content_type("text/html; charset=utf-8")
         .append_header(http::header::CacheControl(vec![
@@ -82,15 +101,14 @@ mod test {
         init();
 
         let auth_service = AuthServiceMock::new();
-        auth_service
-            .create_csrf_token
-            .given(Any)
-            .will_return(Ok("csrftoken".to_string()));
-
+        auth_service.create_csrf_token.given(Any).will_return(Ok((
+            "csrftoken".to_string(),
+            time::OffsetDateTime::now_utc(),
+        )));
         let api = ApiTestDriver::new(auth_service.clone()).await;
 
         //test execution
-        let resp = api.get("/api/csrf").send().await.unwrap();
+        let resp = api.get("/api/auth/csrf").send().await.unwrap();
 
         //test verdict
         assert!(resp.status() == StatusCode::OK);

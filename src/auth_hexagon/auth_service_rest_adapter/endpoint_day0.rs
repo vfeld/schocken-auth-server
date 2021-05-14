@@ -76,7 +76,7 @@ mod test {
 
         //test execution
         let resp = api
-            .put(&format!("/api/register/day0/{}", token))
+            .put(&format!("/api/auth/register/day0/{}", token))
             .json(&json!({
             "login_name":cred.login_name,
             "password":cred.password,
@@ -115,7 +115,7 @@ mod test {
 
         //test execution
         let resp = api
-            .put(&format!("/api/register/day0/{}", token))
+            .put(&format!("/api/auth/register/day0/{}", token))
             .json(&json!({
             "password":cred.password,
             "email":profile.email,

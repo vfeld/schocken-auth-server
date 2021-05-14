@@ -26,7 +26,7 @@ async fn test_session_token() {
         Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
-            "".into()
+            SessionToken::default()
         }
     };
 
@@ -41,7 +41,7 @@ async fn test_session_token() {
         Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
-            "".into()
+            SessionToken::default()
         }
     };
 
@@ -56,7 +56,7 @@ async fn test_session_token() {
         Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
-            "".into()
+            SessionToken::default()
         }
     };
 
@@ -111,7 +111,7 @@ async fn test_session_token() {
         Ok((token, _)) => token,
         Err(_) => {
             assert!(false);
-            "".into()
+            SessionToken::default()
         }
     };
     store

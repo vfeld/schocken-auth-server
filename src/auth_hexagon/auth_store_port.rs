@@ -9,7 +9,7 @@ pub trait AuthStorePort {
         user: &UserProfile,
         login_name: &str,
         password_hash: &[u8],
-        roles: Vec<Roles>,
+        roles: Vec<Role>,
         token: &Token,
         lifetime: time::Duration,
     ) -> Result<UserId, AuthStoreError>;
@@ -24,6 +24,7 @@ pub trait AuthStorePort {
         session_id: &str,
     ) -> Result<Option<UserId>, AuthStoreError>;
     async fn delete_session_id(&self, user_id: &UserId) -> Result<(), AuthStoreError>;
+    async fn get_user_profile(&self, user_id: &UserId) -> Result<UserProfile, AuthStoreError>;
 }
 
 #[derive(Debug, Clone)]

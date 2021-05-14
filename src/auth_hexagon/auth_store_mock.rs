@@ -14,7 +14,7 @@ pub struct AuthStoreMock {
             UserProfile,
             String,
             Vec<u8>,
-            Vec<Roles>,
+            Vec<Role>,
             Token,
             time::Duration,
         )>,
@@ -28,6 +28,8 @@ pub struct AuthStoreMock {
         Mock<Matcher<String>, Result<Option<UserId>, super::auth_store_port::AuthStoreError>>,
     pub delete_session_id:
         Mock<Matcher<UserId>, Result<(), super::auth_store_port::AuthStoreError>>,
+    pub get_user_profile:
+        Mock<Matcher<UserId>, Result<UserProfile, super::auth_store_port::AuthStoreError>>,
 }
 
 impl AuthStoreMock {
@@ -39,6 +41,7 @@ impl AuthStoreMock {
             set_session_id: Mock::new(Ok(())),
             get_user_id_by_session_id: Mock::new(Ok(None)),
             delete_session_id: Mock::new(Ok(())),
+            get_user_profile: Mock::new(Ok(UserProfile::default())),
         }
     }
 }
@@ -54,7 +57,7 @@ impl AuthStorePort for AuthStoreMock {
         user: &UserProfile,
         login_name: &str,
         password_hash: &[u8],
-        roles: Vec<Roles>,
+        roles: Vec<Role>,
         token: &Token,
         lifetime: time::Duration,
     ) -> Result<UserId, AuthStoreError> {
@@ -92,5 +95,9 @@ impl AuthStorePort for AuthStoreMock {
 
     async fn delete_session_id(&self, user_id: &UserId) -> Result<(), AuthStoreError> {
         self.delete_session_id.called(Matcher::Val(user_id.clone()))
+    }
+
+    async fn get_user_profile(&self, user_id: &UserId) -> Result<UserProfile, AuthStoreError> {
+        self.get_user_profile.called(Matcher::Val(user_id.clone()))
     }
 }

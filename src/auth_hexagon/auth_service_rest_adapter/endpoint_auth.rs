@@ -1,6 +1,7 @@
 use super::super::{auth_service_port::AuthServicePort, auth_types::*};
 use actix_web::error::Error;
 use actix_web::{cookie, http, http::StatusCode, web, HttpResponse};
+use serde_json::json;
 
 pub async fn auth_session_create<A>(
     credential: web::Json<Credential>,
@@ -13,37 +14,54 @@ where
     let credential = credential.into_inner();
     let user_id = service.auth_credential(&credential).await?;
     let (token, expires) = service.create_session_token(&user_id).await?;
+    let profile = service.get_user_profile(&user_id).await?;
     Ok(HttpResponse::Ok()
         .cookie(
-            http::Cookie::build("_Host-SCHOCKEN_SESSION", token)
+            http::Cookie::build("_Host-SCHOCKEN_SESSION", token.0)
+                .path("/api/auth")
                 .http_only(true)
                 .secure(true)
                 .same_site(cookie::SameSite::None)
                 .expires(expires)
                 .finish(),
         )
-        .finish())
+        .json(json!({
+            "first_name": profile.first_name,
+            "last_name": profile.last_name,
+            "session_expiry": expires.unix_timestamp()
+        })))
 }
 
 pub async fn auth_session_validate<A>(
-    _user_id: UserId,
-    _service: web::Data<A>,
+    session_token: SessionToken,
+    service: web::Data<A>,
 ) -> Result<HttpResponse, Error>
 where
     A: AuthServicePort,
 {
-    //validation is performed by the authorizing UserId (in the FromRequest trait impl)
-    Ok(HttpResponse::Ok().finish())
+    let (user_id, expiry) = service
+        .auth_session_token(&SessionToken(session_token.0))
+        .await?;
+    let profile = service.get_user_profile(&user_id).await?;
+
+    Ok(HttpResponse::Ok().json(json!({
+        "first_name": profile.first_name,
+        "last_name": profile.last_name,
+        "session_expiry": expiry.unix_timestamp(),
+    })))
 }
 
 pub async fn auth_session_delete<A>(
-    user_id: UserId,
+    session_token: SessionToken,
     _valid_csrf: ValidateCsrf,
     service: web::Data<A>,
 ) -> Result<HttpResponse, Error>
 where
     A: AuthServicePort,
 {
+    let (user_id, _expiry) = service
+        .auth_session_token(&SessionToken(session_token.0))
+        .await?;
     service.delete_session_token(&user_id).await?;
     Ok(HttpResponse::build(StatusCode::OK)
         .cookie(
@@ -86,7 +104,7 @@ mod test {
             .create_session_token
             .given(Any)
             .will_return(Ok((
-                "sessiontoken".to_string(),
+                SessionToken("sessiontoken".to_string()),
                 time::OffsetDateTime::now_utc(),
             )));
 
@@ -131,7 +149,7 @@ mod test {
             .create_session_token
             .given(Any)
             .will_return(Ok((
-                "sessiontoken".to_string(),
+                SessionToken("sessiontoken".to_string()),
                 time::OffsetDateTime::now_utc(),
             )));
 
@@ -164,7 +182,7 @@ mod test {
         auth_service
             .auth_session_token
             .given(Any)
-            .will_return(Ok(UserId(uid)));
+            .will_return(Ok((UserId(uid), time::OffsetDateTime::now_utc())));
 
         let api = ApiTestDriver::new(auth_service.clone()).await;
 
@@ -191,7 +209,7 @@ mod test {
         auth_service
             .auth_session_token
             .given(Any)
-            .will_return(Ok(UserId(uid)));
+            .will_return(Ok((UserId(uid), time::OffsetDateTime::now_utc())));
 
         let api = ApiTestDriver::new(auth_service.clone()).await;
 

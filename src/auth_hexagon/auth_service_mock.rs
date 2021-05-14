@@ -20,12 +20,18 @@ pub struct AuthServiceMock {
         Matcher<UserId>,
         Result<(SessionToken, OffsetDateTime), super::auth_service_port::AuthServiceError>,
     >,
-    pub auth_session_token:
-        Mock<Matcher<SessionToken>, Result<UserId, super::auth_service_port::AuthServiceError>>,
+    pub auth_session_token: Mock<
+        Matcher<SessionToken>,
+        Result<(UserId, time::OffsetDateTime), super::auth_service_port::AuthServiceError>,
+    >,
     pub delete_session_token:
         Mock<Matcher<UserId>, Result<(), super::auth_service_port::AuthServiceError>>,
-    pub create_csrf_token:
-        Mock<Matcher<()>, Result<CsrfToken, super::auth_service_port::AuthServiceError>>,
+    pub create_csrf_token: Mock<
+        Matcher<()>,
+        Result<(CsrfToken, time::OffsetDateTime), super::auth_service_port::AuthServiceError>,
+    >,
+    pub get_user_profile:
+        Mock<Matcher<UserId>, Result<UserProfile, super::auth_service_port::AuthServiceError>>,
 }
 
 #[async_trait]
@@ -70,7 +76,7 @@ impl AuthServicePort for AuthServiceMock {
     async fn auth_session_token(
         &self,
         session_token: &SessionToken,
-    ) -> Result<UserId, super::auth_service_port::AuthServiceError> {
+    ) -> Result<(UserId, time::OffsetDateTime), super::auth_service_port::AuthServiceError> {
         self.auth_session_token
             .called(Matcher::Val(session_token.clone()))
     }
@@ -84,8 +90,15 @@ impl AuthServicePort for AuthServiceMock {
 
     async fn create_csrf_token(
         &self,
-    ) -> Result<CsrfToken, super::auth_service_port::AuthServiceError> {
+    ) -> Result<(CsrfToken, time::OffsetDateTime), super::auth_service_port::AuthServiceError> {
         self.create_csrf_token.called(Matcher::Val(()))
+    }
+
+    async fn get_user_profile(
+        &self,
+        user_id: &UserId,
+    ) -> Result<UserProfile, super::auth_service_port::AuthServiceError> {
+        self.get_user_profile.called(Matcher::Val(user_id.clone()))
     }
 }
 
@@ -95,10 +108,14 @@ impl AuthServiceMock {
             set_day0_token: Mock::new(Ok(())),
             day0_registration: Mock::new(Ok(UserId(0))),
             auth_credential: Mock::new(Ok(UserId(0))),
-            create_session_token: Mock::new(Ok(("".into(), time::OffsetDateTime::now_utc()))),
-            auth_session_token: Mock::new(Ok(UserId(0))),
+            create_session_token: Mock::new(Ok((
+                SessionToken::default(),
+                time::OffsetDateTime::now_utc(),
+            ))),
+            auth_session_token: Mock::new(Ok((UserId(0), time::OffsetDateTime::now_utc()))),
             delete_session_token: Mock::new(Ok(())),
-            create_csrf_token: Mock::new(Ok("".into())),
+            create_csrf_token: Mock::new(Ok(("".into(), time::OffsetDateTime::now_utc()))),
+            get_user_profile: Mock::new(Ok(UserProfile::default())),
         }
     }
 }

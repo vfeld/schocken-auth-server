@@ -10,6 +10,7 @@ use log::error;
 pub mod pg_error_mapping;
 pub mod pg_queries;
 pub mod pg_queries_credential;
+pub mod pg_queries_profile;
 pub mod pg_queries_session;
 #[cfg(test)]
 pub mod test_utils;
@@ -91,7 +92,7 @@ impl AuthStorePort for AuthStorePgAdapter {
         user: &UserProfile,
         login_name: &str,
         password_hash: &[u8],
-        roles: Vec<Roles>,
+        roles: Vec<Role>,
         token: &super::auth_types::Token,
         lifetime: time::Duration,
     ) -> Result<UserId, AuthStoreError> {
@@ -152,6 +153,11 @@ impl AuthStorePort for AuthStorePgAdapter {
     async fn delete_session_id(&self, user_id: &UserId) -> Result<(), AuthStoreError> {
         let pool = self.pool.clone();
         pg_queries_session::delete_session(pool.clone(), user_id).await
+    }
+
+    async fn get_user_profile(&self, user_id: &UserId) -> Result<UserProfile, AuthStoreError> {
+        let pool = self.pool.clone();
+        pg_queries_profile::get_profile(pool, user_id).await
     }
 }
 
@@ -224,7 +230,7 @@ mod tests {
             pwhash::MEMLIMIT_INTERACTIVE,
         )
         .unwrap();
-        let roles = vec![Roles::Admin, Roles::Default];
+        let roles = vec![Role::Admin, Role::Default];
         let token: Token = "1234567890".into();
         let lifetime = time::Duration::second() * 60;
 
@@ -290,7 +296,7 @@ mod tests {
         )
         .unwrap();
 
-        let roles = vec![Roles::Admin, Roles::Default];
+        let roles = vec![Role::Admin, Role::Default];
         let token: Token = "1234567890".into();
         let token_invalid: Token = "1234567891".into();
 
@@ -340,7 +346,7 @@ mod tests {
             pwhash::MEMLIMIT_INTERACTIVE,
         )
         .unwrap();
-        let roles = vec![Roles::Admin, Roles::Default];
+        let roles = vec![Role::Admin, Role::Default];
         let token: Token = "1234567890".into();
         let lifetime = time::Duration::second() * 60;
 

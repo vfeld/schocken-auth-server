@@ -252,7 +252,7 @@ VALUES ( $1 , $2, $3, $4);
 pub async fn insert_roles(
     pool: Arc<Pool<Postgres>>,
     user_id: UserId,
-    roles: &Vec<Roles>,
+    roles: &Vec<Role>,
 ) -> Result<(), AuthStoreError> {
     for role in roles {
         let rec = sqlx::query(
