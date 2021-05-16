@@ -1,3 +1,4 @@
+use super::auth_types::TlsConfig;
 #[async_trait::async_trait]
 pub trait AuthConfigPort {
     async fn day0_token_lifetime(&self) -> time::Duration;
@@ -12,4 +13,5 @@ pub trait AuthConfigPort {
     async fn session_lifetime(&self) -> time::Duration;
     async fn jwt_signing_secret(&self) -> String;
     async fn allowed_origin(&self) -> String;
+    async fn tls_server_config(&self) -> Option<TlsConfig>;
 }

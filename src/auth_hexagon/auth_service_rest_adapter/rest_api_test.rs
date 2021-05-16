@@ -43,7 +43,7 @@ impl ApiTestDriver {
         let hosturl = format!("http://{}:{}", host, port);
 
         let server =
-            AuthServiceRestAdapter::new(&host, &port.to_string(), service, hosturl.clone())
+            AuthServiceRestAdapter::new(&host, &port.to_string(), service, hosturl.clone(), None)
                 .run()
                 .await;
 

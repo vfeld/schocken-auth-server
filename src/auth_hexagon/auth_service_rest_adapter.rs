@@ -1,8 +1,11 @@
+use std::{fs::File, io::BufReader};
+
 use crate::auth_hexagon::auth_types::SessionToken;
 
 use super::{
     auth_service_port::{AuthServiceError, AuthServicePort},
     auth_types::AllowedOrigin,
+    auth_types::TlsConfig,
     auth_types::ValidateCsrf,
 };
 use actix_cors::Cors;
@@ -13,6 +16,8 @@ use actix_web::{
 use actix_web::{http::StatusCode, middleware::Logger, web, HttpResponse, ResponseError};
 use futures_util::future::{err, ok, Ready};
 use log::error;
+use rustls::internal::pemfile::{certs, pkcs8_private_keys};
+use rustls::{NoClientAuth, ServerConfig};
 use serde_json::json;
 
 pub mod endpoint_auth;
@@ -69,6 +74,16 @@ pub fn cors_middleware(allowed_origin: String) -> Cors {
         .max_age(60)
 }
 
+pub fn rustls_server_config(tls_config: TlsConfig) -> ServerConfig {
+    let mut config = ServerConfig::new(NoClientAuth::new());
+    let cert_file = &mut BufReader::new(File::open(tls_config.pem_cert_filename).unwrap());
+    let key_file = &mut BufReader::new(File::open(tls_config.pem_key_filename).unwrap());
+    let cert_chain = certs(cert_file).unwrap();
+    let mut keys = pkcs8_private_keys(key_file).unwrap();
+    config.set_single_cert(cert_chain, keys.remove(0)).unwrap();
+    config
+}
+
 pub fn json_config() -> web::JsonConfig {
     web::JsonConfig::default()
         .limit(4096)
@@ -93,18 +108,26 @@ where
     port: String,
     service: A,
     allowed_origin: String,
+    tls_config: Option<TlsConfig>,
 }
 
 impl<A> AuthServiceRestAdapter<A>
 where
     A: AuthServicePort + Send + Sync + Clone + 'static,
 {
-    pub fn new(host: &str, port: &str, service: A, allowed_origin: String) -> Self {
+    pub fn new(
+        host: &str,
+        port: &str,
+        service: A,
+        allowed_origin: String,
+        tls_config: Option<TlsConfig>,
+    ) -> Self {
         AuthServiceRestAdapter {
             host: host.into(),
             port: port.into(),
             service,
             allowed_origin,
+            tls_config,
         }
     }
 
@@ -112,7 +135,7 @@ where
         let service = self.service.clone(); //decouple lifetime of service from self
         let address = format!("{}:{}", self.host, self.port);
         let allowed_origin = self.allowed_origin.clone();
-        HttpServer::new(move || {
+        let server_builder = HttpServer::new(move || {
             App::new()
                 .app_data(json_config())
                 .app_data::<Data<Box<dyn AuthServicePort>>>(Data::new(Box::new(service.clone())))
@@ -121,11 +144,19 @@ where
                 .configure(|config| {
                     configure_service_endpoints(config, service.clone(), allowed_origin.clone())
                 })
-        })
-        .bind(address)
-        .expect("Unable to bind server")
-        .workers(1)
-        .run()
+        });
+        match self.tls_config.clone() {
+            Some(tls_config) => server_builder
+                .bind_rustls(address, rustls_server_config(tls_config))
+                .expect("Unable to bind server")
+                .workers(1)
+                .run(),
+            None => server_builder
+                .bind(address)
+                .expect("Unable to bind server")
+                .workers(1)
+                .run(),
+        }
     }
 }
 

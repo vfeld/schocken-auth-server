@@ -15,6 +15,7 @@ where
     let user_id = service.auth_credential(&credential).await?;
     let (token, expires) = service.create_session_token(&user_id).await?;
     let profile = service.get_user_profile(&user_id).await?;
+    let (csrf_token, _) = service.create_csrf_token().await?;
     Ok(HttpResponse::Ok()
         .cookie(
             http::Cookie::build("_Host-SCHOCKEN_SESSION", token.0)
@@ -24,6 +25,22 @@ where
                 .same_site(cookie::SameSite::None)
                 .expires(expires)
                 .finish(),
+        )
+        .cookie(
+            http::Cookie::build(
+                "_Host-SCHOCKEN_CSRF",
+                format!(
+                    "{}_{}_{}",
+                    csrf_token,
+                    expires.unix_timestamp(),
+                    expires.unix_timestamp(),
+                ),
+            )
+            .path("/api/auth")
+            .secure(true)
+            .expires(expires)
+            .same_site(cookie::SameSite::None)
+            .finish(),
         )
         .json(json!({
             "first_name": profile.first_name,
@@ -63,6 +80,8 @@ where
         .auth_session_token(&SessionToken(session_token.0))
         .await?;
     service.delete_session_token(&user_id).await?;
+    let (csrf_token, csrf_expiry) = service.create_csrf_token().await?;
+
     Ok(HttpResponse::build(StatusCode::OK)
         .cookie(
             http::Cookie::build("_Host-SCHOCKEN_SESSION", "deleted")
@@ -71,6 +90,17 @@ where
                 .same_site(cookie::SameSite::None)
                 .expires(time::OffsetDateTime::from_unix_timestamp(0))
                 .finish(),
+        )
+        .cookie(
+            http::Cookie::build(
+                "_Host-SCHOCKEN_CSRF",
+                format!("{}_{}_{}", csrf_token, csrf_expiry.unix_timestamp(), 0,),
+            )
+            .path("/api/auth")
+            .secure(true)
+            .expires(csrf_expiry)
+            .same_site(cookie::SameSite::None)
+            .finish(),
         )
         .finish())
 }

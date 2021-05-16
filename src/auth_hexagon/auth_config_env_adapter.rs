@@ -1,4 +1,5 @@
 use super::auth_config_port::AuthConfigPort;
+use super::auth_types::TlsConfig;
 
 use std::env;
 #[derive(Clone, Debug)]
@@ -70,5 +71,31 @@ impl AuthConfigPort for AuthConfigEnvAdapter {
 
     async fn allowed_origin(&self) -> String {
         env::var("ALLOWED_ORIGIN").expect("ALLOWED_ORIGIN must be set")
+    }
+
+    async fn tls_server_config(&self) -> Option<TlsConfig> {
+        let msg = r#"ENABLE_TLS must be set to true or false.
+        If set to true the variables SERVER_KEY_PEMFILE and SERVER_CERT_PEMFILE
+        have to be set to filenames pointing to server certificate and key
+        files in pem format"#;
+        let enable_tls = env::var("ENABLE_TLS")
+            .expect(msg)
+            .parse::<bool>()
+            .expect(msg);
+        if !enable_tls {
+            return None;
+        };
+        let key = env::var("SERVER_KEY_PEMFILE").expect(
+            r#"When ENABLE_TLS is set to true the 
+        SERVER_KEY_PEMFILE must be set to a filename pointing to server key file in PEM format"#,
+        );
+        let cert = env::var("SERVER_CERT_PEMFILE").expect(
+            r#"When ENABLE_TLS is set to true the 
+        SERVER_CERT_PEMFILE must be set to a filename pointing to server cert file in PEM format"#,
+        );
+        Some(TlsConfig {
+            pem_key_filename: key,
+            pem_cert_filename: cert,
+        })
     }
 }
